@@ -296,17 +296,23 @@ function endGame(victory) {
 }
 
 // ---------------------------------------------------------------- input
-canvas.addEventListener('mousemove', (e) => {
+// Unified pointer events: cover mouse, touch, and pen. pointerdown fires
+// immediately on tap (no iOS click delay); pointermove keeps the reticle
+// following a finger during meteor targeting / slot hover.
+canvas.addEventListener('pointermove', (e) => {
   const p = toVirtual(e.clientX, e.clientY);
   state.mouse = p;
-  if (state.meteorTargeting) canvas.style.cursor = 'crosshair';
-  else if (state.buildType) canvas.style.cursor = 'pointer';
-  else canvas.style.cursor = 'default';
+  if (e.pointerType === 'mouse') {
+    if (state.meteorTargeting) canvas.style.cursor = 'crosshair';
+    else if (state.buildType) canvas.style.cursor = 'pointer';
+    else canvas.style.cursor = 'default';
+  }
 });
 
-canvas.addEventListener('click', (e) => {
+function handlePointerDown(e) {
   if (state.over || !state.started) return;
   const p = toVirtual(e.clientX, e.clientY);
+  state.mouse = p;
 
   // meteor targeting
   if (state.meteorTargeting) {
@@ -327,7 +333,7 @@ canvas.addEventListener('click', (e) => {
       return;
     }
     if (idx >= 0) sfx.error(); // slot there, but broke
-    // clicked empty space: keep build mode
+    // tapped empty space: keep build mode
     return;
   }
 
@@ -339,7 +345,13 @@ canvas.addEventListener('click', (e) => {
   state.selectedTower = picked;
   updateInfo();
   syncHud();
-});
+}
+
+canvas.addEventListener('pointerdown', handlePointerDown);
+
+// Prevent the canvas from hijacking gestures (double-tap zoom, scroll).
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); }, { passive: false });
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 function nearestFreeSlot(p) {
   let best = -1, bestD = 60; // snap radius
