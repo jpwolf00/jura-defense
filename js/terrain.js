@@ -1,0 +1,205 @@
+// Terrain-first board renderer for Jura Defense gameplay.
+// Produces a clear, non-photoreal Jurassic battlefield backdrop.
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function clamp(v, lo = 0, hi = 1) { return Math.min(hi, Math.max(lo, v)); }
+function smoothstep(t) { t = clamp(t); return t * t * (3 - 2 * t); }
+
+// Deterministic pseudo-random value from coordinates.
+function hash(x, y) {
+  const v = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+// Low-frequency grid noise for terrain patch shapes.
+function noise2(x, y, scale) {
+  const sx = x / scale, sy = y / scale;
+  const x0 = Math.floor(sx), y0 = Math.floor(sy);
+  const x1 = x0 + 1, y1 = y0 + 1;
+  const tx = sx - x0, ty = sy - y0;
+  const v00 = hash(x0, y0), v10 = hash(x1, y0), v01 = hash(x0, y1), v11 = hash(x1, y1);
+  const a = lerp(v00, v10, smoothstep(tx));
+  const b = lerp(v01, v11, smoothstep(tx));
+  return lerp(a, b, smoothstep(ty));
+}
+
+// Continuous terrain color ramp: a gradient over [0,1] that maps a combined
+// height+mix value to a smooth earth-tone palette. No discrete steps, so
+// adjacent cells blend and there are no hard "checkerboard" boundaries.
+const RAMP = [
+  { t: 0.00, c: [64, 62, 48] },   // deep mud / low basin
+  { t: 0.18, c: [95, 90, 76] },   // rock shelf
+  { t: 0.38, c: [126, 112, 84] }, // sand / eroded flats
+  { t: 0.58, c: [111, 95, 72] },  // dirt hardpan
+  { t: 0.80, c: [86, 110, 72] },  // dry scrub
+  { t: 1.00, c: [68, 102, 60] },  // lush grass
+];
+
+function rampColor(t) {
+  t = clamp(t);
+  for (let i = 0; i < RAMP.length - 1; i++) {
+    const a = RAMP[i], b = RAMP[i + 1];
+    if (t >= a.t && t <= b.t) {
+      const k = smoothstep((t - a.t) / (b.t - a.t));
+      return [
+        Math.round(lerp(a.c[0], b.c[0], k)),
+        Math.round(lerp(a.c[1], b.c[1], k)),
+        Math.round(lerp(a.c[2], b.c[2], k)),
+      ];
+    }
+  }
+  return RAMP[RAMP.length - 1].c;
+}
+
+// Combine height + moisture noise into a single continuous terrain value.
+function terrainValue(x, y) {
+  const h = noise2(x, y, 200);
+  const moist = noise2(x + 4000, y + 4000, 260);
+  const v = h * 0.62 + moist * 0.38;
+  // Flatten the extremes slightly so mid-tones dominate (organic field).
+  return v;
+}
+
+function rgbStr(c) { return `rgb(${c[0]},${c[1]},${c[2]})`; }
+function shade(c, amt) {
+  return [Math.round(clamp(c[0] + amt, 0, 255)), Math.round(clamp(c[1] + amt, 0, 255)), Math.round(clamp(c[2] + amt, 0, 255))];
+}
+
+// Static terrain rendered once into an offscreen canvas (8px cells, continuous
+// color) then blitted every frame. Continuous colors mean adjacent cells are
+// near-identical, so the field reads as organic ground, not a color grid.
+let _terrainCache = null;
+let _terrainCacheW = 0, _terrainCacheH = 0;
+
+function makeTerrainCanvas(w, h) {
+  const C = (typeof OffscreenCanvas !== 'undefined')
+    ? new OffscreenCanvas(w, h)
+    : document.createElement('canvas');
+  C.width = w; C.height = h;
+  const c = C.getContext('2d');
+  const cell = 8;
+  const cols = Math.ceil(w / cell);
+  const rows = Math.ceil(h / cell);
+
+  for (let r = 0; r < rows; r++) {
+    for (let col = 0; col < cols; col++) {
+      const x = col * cell, y = r * cell;
+      const cx = x + cell / 2, cy = y + cell / 2;
+      c.fillStyle = rgbStr(rampColor(terrainValue(cx, cy)));
+      c.fillRect(x, y, cell, cell);
+    }
+  }
+
+  // Sparse environmental detail — recognizable grass tufts and rocks instead
+  // of fine grain, so the field reads as "alive" without looking noisy.
+  const decorate = (gx, gy) => {
+    const n = hash(gx, gy);
+    const v = terrainValue(gx, gy);
+    const px = Math.floor(gx), py = Math.floor(gy);
+    const base = rampColor(v);
+    if (n > 0.965) {
+      // grass tuft: a few short blades
+      c.strokeStyle = rgbStr(shade([74, 110, 62], Math.floor((n * 977) % 30) - 15));
+      c.lineWidth = 1.5;
+      c.beginPath();
+      for (let b = 0; b < 3; b++) {
+        const bx = px + (n * 613 + b * 7) % 10 - 5;
+        const by = py + (n * 431 + b * 11) % 10 - 5;
+        c.moveTo(bx, by);
+        c.lineTo(bx + ((n * 743 + b) % 5) - 2, by - 4 - (n * 5 % 3));
+      }
+      c.stroke();
+    } else if (n > 0.945) {
+      // small rock
+      c.fillStyle = rgbStr(shade([95, 90, 80], Math.floor((n * 613) % 20) - 10));
+      c.beginPath();
+      c.ellipse(px, py, 3 + (n * 977) % 3, 2 + (n * 431) % 2, 0, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = 'rgba(0,0,0,0.12)';
+      c.beginPath();
+      c.ellipse(px + 1, py + 1, 2, 1.2, 0, 0, Math.PI * 2);
+      c.fill();
+    }
+  };
+  for (let gx = 0; gx < w; gx += 24) {
+    for (let gy = 0; gy < h; gy += 24) {
+      decorate(gx, gy);
+    }
+  }
+  return C;
+}
+
+// Blit the cached terrain backdrop into the supplied canvas context.
+export function renderTerrainBackground(ctx, w, h) {
+  if (!_terrainCache || _terrainCacheW !== w || _terrainCacheH !== h) {
+    _terrainCache = makeTerrainCanvas(w, h);
+    _terrainCacheW = w; _terrainCacheH = h;
+  }
+  ctx.drawImage(_terrainCache, 0, 0, w, h);
+}
+
+// Render the winding enemy trail over terrain as a visible earth road.
+export function renderGamePath(ctx, waypoints, lineWidth = 52) {
+  if (!waypoints || waypoints.length < 2) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  // Broad worn base.
+  ctx.strokeStyle = '#272017';
+  ctx.lineWidth = lineWidth + 8;
+  path(ctx, waypoints);
+  ctx.stroke();
+  // Compact center.
+  ctx.strokeStyle = '#3b3222';
+  ctx.lineWidth = lineWidth;
+  path(ctx, waypoints);
+  ctx.stroke();
+  // Edge wear line.
+  ctx.strokeStyle = 'rgba(224,164,88,0.18)';
+  ctx.lineWidth = lineWidth + 12;
+  ctx.globalAlpha = 0.55;
+  path(ctx, waypoints);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// Dashed placement hints that do not dominate the board.
+export function renderDashedSlots(ctx, slots) {
+  if (!slots || !slots.length) return;
+  for (const slot of slots) {
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.strokeStyle = '#8fa093';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.arc(slot.x, slot.y, 26, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(slot.x - 8, slot.y);
+    ctx.lineTo(slot.x + 8, slot.y);
+    ctx.moveTo(slot.x, slot.y - 8);
+    ctx.lineTo(slot.x, slot.y + 8);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// Light fog to unify layers without burying contrast.
+export function renderFogOverlay(ctx, w, h) {
+  ctx.save();
+  ctx.globalAlpha = 0.06;
+  ctx.fillStyle = '#a8b8aa';
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+}
+
+function path(ctx, waypoints) {
+  ctx.beginPath();
+  ctx.moveTo(waypoints[0][0], waypoints[0][1]);
+  for (let i = 1; i < waypoints.length; i++) {
+    ctx.lineTo(waypoints[i][0], waypoints[i][1]);
+  }
+}
