@@ -449,12 +449,11 @@ function update(dt) {
   if (meteorFalling && !s.meteor.target) sfx.meteor(); // it just impacted
 
   for (const e of s.enemies) e.update(dt, performance.now());
-  const projBefore = s.projectiles.length;
-  const pulseBefore = s.fx.pulses.length;
   for (const t of s.towers) t.update(dt, s.enemies, performance.now(), s.projectiles, s.fx);
   // play fire sfx for anything that just fired
-  if (s.projectiles.length > projBefore) sfx.fire('single');
-  if (s.fx.pulses.length > pulseBefore) sfx.fire('aoe');
+  for (const t of s.towers) {
+    if (t.lastFireSfx) { sfx.fire(t.lastFireSfx); t.lastFireSfx = null; }
+  }
   updateProjectiles(dt);
   s.fx.update(dt);
   s.chrono.tick(dt, s.enemies, s.towers);

@@ -62,9 +62,15 @@ function noise({ dur = 0.3, gain = 0.4, delay = 0, lowpass = 1200 }) {
   n.stop(t0 + dur);
 }
 
-export function fire(kind) {
-  if (kind === 'aoe') { tone({ freq: 180, end: 90, type: 'square', dur: 0.12, gain: 0.25 }); return; }
-  tone({ freq: 520, end: 320, type: 'triangle', dur: 0.08, gain: 0.18 });
+export function fire(type) {
+  switch (type) {
+    case 'tranq': tone({ freq: 180, end: 120, type: 'triangle', dur: 0.09, gain: 0.2 }); return;
+    case 'drone': tone({ freq: 900, end: 700, type: 'square', dur: 0.04, gain: 0.1 }); return;
+    case 'fence': tone({ freq: 180, end: 90, type: 'square', dur: 0.12, gain: 0.25 }); return;
+    case 'heli': tone({ freq: 110, end: 55, type: 'sine', dur: 0.16, gain: 0.3 }); return;
+    case 'chrono': tone({ freq: 500, end: 900, type: 'sine', dur: 0.12, gain: 0.18 }); return;
+    default: tone({ freq: 520, end: 320, type: 'triangle', dur: 0.08, gain: 0.18 });
+  }
 }
 export function hit() { tone({ freq: 220, end: 140, type: 'sawtooth', dur: 0.05, gain: 0.1 }); }
 export function kill() { tone({ freq: 340, end: 620, type: 'square', dur: 0.14, gain: 0.16 }); }

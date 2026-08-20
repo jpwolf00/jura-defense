@@ -28,6 +28,7 @@ export class Tower {
     this.angle = 0;
     this.restAngle = 0;   // barrel resting direction (toward path)
     this.flash = 0;
+    this.lastFireSfx = null;
     this._img = null;
     if (this.t.sprite) spriteImage(this.t.sprite, (i) => { this._img = i; });
   }
@@ -66,6 +67,7 @@ export class Tower {
 
   fire(projectiles, fx, enemies) {
     this.flash = 0.1;
+    this.lastFireSfx = this.t.kind === 'aoe' ? 'fence' : this.type;
     if (this.t.kind === 'aoe') {
       // instant pulse
       fx.pulse(this.x, this.y, this.range);
