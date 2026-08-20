@@ -188,6 +188,17 @@ function updateInfo() {
   }
 }
 
+// Lightweight cache so the selected tower card only rebuilds when the
+// selected tower identity or its live target identity/dead-state changes.
+let infoCache = { tower: null, target: null, dead: null };
+
+function infoCacheKey() {
+  const tw = state.selectedTower;
+  if (!tw) return null;
+  const tg = tw.target;
+  return { tower: tw, target: tg, dead: tg ? tg.dead : null };
+}
+
 // ---------------------------------------------------------------- HUD
 function syncHud() {
   $money.textContent = Math.floor(state.money);
@@ -209,6 +220,15 @@ function syncHud() {
   $chronoMeter.style.width = `${Math.round(state.chrono.pct * 100)}%`;
   $chronoBtn.classList.toggle('ready', state.chrono.ready);
   refreshShop();
+
+  // Refresh the selected tower card only when its target changed.
+  const key = infoCacheKey();
+  if (!key) {
+    if (infoCache.tower !== null) infoCache = { tower: null, target: null, dead: null };
+  } else if (key.tower !== infoCache.tower || key.target !== infoCache.target || key.dead !== infoCache.dead) {
+    infoCache = key;
+    updateInfo();
+  }
 }
 
 // ---------------------------------------------------------------- actions
