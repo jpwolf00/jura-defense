@@ -70,6 +70,13 @@ function shade(c, amt) {
 // near-identical, so the field reads as organic ground, not a color grid.
 let _terrainCache = null;
 let _terrainCacheW = 0, _terrainCacheH = 0;
+let _terrainPlateReady = false;
+const _terrainPlate = new Image();
+_terrainPlate.onload = () => {
+  _terrainPlateReady = true;
+  _terrainCache = null;
+};
+_terrainPlate.src = new URL('../assets/terrain_bg.png', import.meta.url).href;
 
 function makeTerrainCanvas(w, h) {
   const C = (typeof OffscreenCanvas !== 'undefined')
@@ -174,6 +181,10 @@ function makeTerrainCanvas(w, h) {
 
 // Blit the cached terrain backdrop into the supplied canvas context.
 export function renderTerrainBackground(ctx, w, h) {
+  if (_terrainPlateReady) {
+    ctx.drawImage(_terrainPlate, 0, 0, w, h);
+    return;
+  }
   if (!_terrainCache || _terrainCacheW !== w || _terrainCacheH !== h) {
     _terrainCache = makeTerrainCanvas(w, h);
     _terrainCacheW = w; _terrainCacheH = h;
@@ -247,7 +258,7 @@ export function renderDashedSlots(ctx, slots) {
 // Light fog to unify layers without burying contrast.
 export function renderFogOverlay(ctx, w, h) {
   ctx.save();
-  ctx.globalAlpha = 0.06;
+  ctx.globalAlpha = 0.025;
   ctx.fillStyle = '#a8b8aa';
   ctx.fillRect(0, 0, w, h);
   ctx.restore();
