@@ -1,9 +1,12 @@
-// Lightweight particle + effect system (pulses, explosions, screen shake, floaters).
+// Particle + effect system: pulses, explosions, impact flashes, screen shake,
+// floaters. Uses additive blending ('lighter') for glow so effects read vividly.
 
 export class FX {
   constructor() {
     this.pulses = [];
     this.explosions = [];
+    this.flashes = [];      // impact/launch flash rings
+    this.shockwaves = [];   // kill shockwave rings
     this.particles = [];
     this.floaters = [];
     this.shakeT = 0;
@@ -12,80 +15,81 @@ export class FX {
   }
 
   pulse(x, y, r) {
-    this.pulses.push({ x, y, r0: r * 0.3, r, t: 0, dur: 0.35 });
+    this.pulses.push({ x, y, r0: r * 0.25, r, t: 0, dur: 0.4 });
+  }
+
+  // Small bright impact flash (projectile hit).
+  hit(x, y, color) {
+    this.flashes.push({ x, y, color, r: 18, t: 0, dur: 0.18 });
+    for (let i = 0; i < 8; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 60 + Math.random() * 180;
+      this.particles.push({
+        x, y,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        t: 0, dur: 0.25 + Math.random() * 0.15,
+        size: 1.5 + Math.random() * 2.5,
+        color, grav: 90, glow: true,
+      });
+    }
   }
 
   explosion(x, y, r) {
     this.explosions.push({ x, y, r, t: 0, dur: 0.6 });
-    const n = 40;
+    this.flashes.push({ x, y, color: '#ffce6a', r: r * 0.9, t: 0, dur: 0.3 });
+    this.shockwaves.push({ x, y, r: r * 1.2, t: 0, dur: 0.4 });
+    this.shake(0.25, 14);
+    const n = 50;
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
-      const sp = 60 + Math.random() * 260;
+      const sp = 70 + Math.random() * 300;
       this.particles.push({
         x, y,
         vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
         t: 0, dur: 0.5 + Math.random() * 0.5,
         size: 2 + Math.random() * 5,
         color: Math.random() > 0.5 ? '#ffb060' : '#e05a30',
-        grav: 200,
+        grav: 200, glow: true,
       });
     }
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 18; i++) {
       const a = Math.random() * Math.PI * 2;
-      const sp = 20 + Math.random() * 90;
+      const sp = 20 + Math.random() * 100;
       this.particles.push({
         x, y,
         vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 30,
         t: 0, dur: 0.8 + Math.random() * 0.6,
-        size: 8 + Math.random() * 14,
-        color: '#3a3a3a',
-        grav: -20, smoke: true,
+        size: 8 + Math.random() * 16,
+        color: '#3a3a3a', grav: -20, smoke: true,
       });
     }
   }
 
-  // Death burst: dramatic explosion on enemy kill
+  // Death burst: dramatic explosion on enemy kill.
   death(x, y, color, radius) {
-    // body fragments
-    for (let i = 0; i < 18; i++) {
+    this.flashes.push({ x, y, color: '#ffffff', r: radius * 1.6, t: 0, dur: 0.22 });
+    this.shockwaves.push({ x, y, r: radius * 2.2, t: 0, dur: 0.35 });
+    this.shake(0.18, 10);
+    for (let i = 0; i < 22; i++) {
       const a = Math.random() * Math.PI * 2;
-      const sp = 40 + Math.random() * 180;
+      const sp = 50 + Math.random() * 220;
       this.particles.push({
         x, y,
         vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40,
         t: 0, dur: 0.6 + Math.random() * 0.4,
-        size: 2 + Math.random() * 4,
-        color: color,
-        grav: 150,
+        size: 2 + Math.random() * 5,
+        color, grav: 150, glow: true,
       });
     }
-    // glow burst
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 12; i++) {
       const a = Math.random() * Math.PI * 2;
-      const sp = 10 + Math.random() * 60;
+      const sp = 10 + Math.random() * 70;
       this.particles.push({
         x, y,
         vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 20,
         t: 0, dur: 0.5 + Math.random() * 0.3,
-        size: 4 + Math.random() * 6,
-        color: '#ffffff',
-        grav: -30, smoke: true,
-      });
-    }
-    this.shake(0.15);
-  }
-
-  hit(x, y, color) {
-    for (let i = 0; i < 6; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const sp = 50 + Math.random() * 150;
-      this.particles.push({
-        x, y,
-        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-        t: 0, dur: 0.3,
-        size: 1.5 + Math.random() * 2.5,
-        color,
-        grav: 80,
+        size: 4 + Math.random() * 7,
+        color: '#ffffff', grav: -30, smoke: true,
       });
     }
   }
@@ -96,7 +100,7 @@ export class FX {
 
   shake(seconds, mag = 12) {
     this.shakeT = Math.max(this.shakeT, seconds);
-    this.shakeMag = mag;
+    this.shakeMag = Math.max(this.shakeMag, mag);
   }
 
   update(dt) {
@@ -104,6 +108,8 @@ export class FX {
     if (this.rewind > 0) this.rewind = Math.max(0, this.rewind - dt / 0.9);
     this.pulses = this.pulses.filter(p => (p.t += dt) < p.dur);
     this.explosions = this.explosions.filter(e => (e.t += dt) < e.dur);
+    this.flashes = this.flashes.filter(f => (f.t += dt) < f.dur);
+    this.shockwaves = this.shockwaves.filter(s => (s.t += dt) < s.dur);
     this.particles = this.particles.filter(p => {
       p.t += dt;
       p.x += p.vx * dt;
@@ -128,11 +134,12 @@ export class FX {
   }
 
   draw(ctx) {
-    // pulses
+    // pulses (aoe rings)
     for (const p of this.pulses) {
       const k = p.t / p.dur;
       ctx.save();
-      ctx.globalAlpha = 0.6 * (1 - k);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.7 * (1 - k);
       ctx.strokeStyle = '#58c8a0';
       ctx.lineWidth = 4 * (1 - k) + 1;
       ctx.beginPath();
@@ -140,28 +147,58 @@ export class FX {
       ctx.stroke();
       ctx.restore();
     }
-    // explosions
+    // shockwaves (kill/explosion rings)
+    for (const s of this.shockwaves) {
+      const k = s.t / s.dur;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.7 * (1 - k);
+      ctx.strokeStyle = '#ffd27a';
+      ctx.lineWidth = 3 * (1 - k) + 1;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r * k, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    // flashes (impact glow discs)
+    for (const f of this.flashes) {
+      const k = f.t / f.dur;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r);
+      g.addColorStop(0, f.color);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = 0.9 * (1 - k);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    // explosions (fire ring + core)
     for (const e of this.explosions) {
       const k = e.t / e.dur;
       ctx.save();
-      ctx.globalAlpha = 0.8 * (1 - k);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.85 * (1 - k);
       ctx.strokeStyle = '#ff8a3c';
-      ctx.lineWidth = 8 * (1 - k) + 2;
+      ctx.lineWidth = 10 * (1 - k) + 2;
       ctx.beginPath();
       ctx.arc(e.x, e.y, e.r * k, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.globalAlpha = 0.5 * (1 - k);
+      ctx.globalAlpha = 0.6 * (1 - k);
       ctx.fillStyle = '#ffce6a';
       ctx.beginPath();
       ctx.arc(e.x, e.y, e.r * 0.5 * (1 - k), 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
-    // particles
+    // particles (additive glow for non-smoke)
     for (const p of this.particles) {
       const k = 1 - p.t / p.dur;
       ctx.save();
-      ctx.globalAlpha = p.smoke ? 0.35 * k : 0.9 * k;
+      if (p.glow) ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = p.smoke ? 0.35 * k : 0.95 * k;
       ctx.fillStyle = p.color;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size * (p.smoke ? 1 + (p.t / p.dur) * 2 : k), 0, Math.PI * 2);

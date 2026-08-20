@@ -510,6 +510,15 @@ function updateProjectiles(dt) {
       p.px = p.x; p.py = p.y;
       p.x += dx / d * step;
       p.y += dy / d * step;
+      // spark trail behind the projectile
+      if (Math.random() < 0.6) {
+        s.fx.particles.push({
+          x: p.x, y: p.y,
+          vx: (Math.random() - 0.5) * 30, vy: (Math.random() - 0.5) * 30,
+          t: 0, dur: 0.2, size: 1.5 + Math.random() * 2,
+          color: p.color, grav: 0, glow: true,
+        });
+      }
     }
   }
   s.projectiles = s.projectiles.filter(p => p.life > 0);

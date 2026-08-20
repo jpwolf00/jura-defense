@@ -50,6 +50,7 @@ export class Enemy {
     }
     this.x = 0; this.y = 0;
     this.heading = 0;
+    this.flip = -1;            // sprite faces left; -1 mirrors to face right (spawn dir)
     this.slowUntil = 0;
     this.slowFactor = 1;
     this.dead = false;
@@ -75,6 +76,13 @@ export class Enemy {
     const p = pointAt(this.dist);
     this.x = p.x; this.y = p.y;
     this.heading = headingAt(this.dist);
+    // Facing: sprites are drawn facing LEFT. Only flip on clear horizontal
+    // motion (hysteresis), so dinos keep their last left/right facing while
+    // walking vertical path segments instead of snapping to a backward pose.
+    const hx = Math.cos(this.heading);
+    if (hx > 0.25) this.flip = -1;      // moving right → mirror to face right
+    else if (hx < -0.25) this.flip = 1; // moving left  → face left
+    // else: keep this.flip (vertical movement)
   }
 
   // Path length used for "reached the rig" (free-fly is its own straight line).
@@ -160,9 +168,8 @@ export class Enemy {
       const tilt = step * motion.tilt;
       const tailPulse = Math.sin(phase + Math.PI / 2) * motion.tail;
       ctx.save();
-      // Source images face left; mirror only for direction of travel.
-      const flip = Math.cos(this.heading) > 0 ? -1 : 1;
-      ctx.scale(flip, 1);
+      // Source images face left; mirror via persistent facing (set in _sync).
+      ctx.scale(this.flip, 1);
       ctx.translate(0, -bob);
       ctx.rotate(tilt);
       const flapScale = motion.flap > 0 ? 1 + Math.sin(phase) * motion.flap : 1;

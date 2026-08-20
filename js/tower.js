@@ -2,9 +2,9 @@ import { spriteImage, SPRITES } from './sprites.js';
 
 export const TOWER_TYPES = {
   tranq:  { name: 'Tranq Cannon',  cost: 90,  range: 170, rate: 0.9,  dmg: 16, color: '#5aa0c8',
-            desc: 'Slows target 45% for 2s.', kind: 'single', slow: 0.55, slowDur: 2, sprite: 'tower_tranq' },
+            desc: 'Slows target 45% for 2s.', kind: 'single', slow: 0.55, slowDur: 2, sprite: 'tower_tranq', barrelAngle: Math.PI },
   drone:  { name: 'Drone Swarm',   cost: 70,  range: 130, rate: 0.28, dmg: 5,  color: '#c8b05a',
-            desc: 'Cheap, rapid-fire.', kind: 'single', sprite: 'tower_drone' },
+            desc: 'Cheap, rapid-fire.', kind: 'single', sprite: 'tower_drone', barrelAngle: -Math.PI / 2 },
   fence:  { name: 'Volt Fence',    cost: 130, range: 90,  rate: 1.1,  dmg: 14, color: '#58c8a0',
             desc: 'Pulses: hits EVERYTHING in range.', kind: 'aoe', sprite: 'tower_aoe' },
   heli:   { name: 'Heli Gunner',   cost: 220, range: 280, rate: 1.6,  dmg: 48, color: '#b05858',
@@ -110,56 +110,62 @@ export class Tower {
     roundRect(ctx, -s, -s, s * 2, s * 2, 8);
     ctx.fill(); ctx.stroke();
 
-    // turret: sprite body stays fixed, barrel rotates
     const img = this._img;
+    const aim = this.target ? this.angle : this.restAngle;
     if (img && img.complete && img.naturalWidth) {
       const meta = SPRITES[this.t.sprite];
       const aspect = meta.w / meta.h;
       const h = s * 2.6;
       const w = h * aspect;
       ctx.save();
-      // body: slightly squish on flash, otherwise fixed orientation
-      if (this.flash > 0) {
-        ctx.scale(1.05, 0.95);
-        ctx.filter = 'brightness(1.4)';
-      }
+      // Rotate the whole sprite so its baked-in weapon aims at the target.
+      // Sprites without a directional barrel (aoe lamp, chrono ring) stay fixed.
+      if (this.t.barrelAngle !== undefined) ctx.rotate(aim - this.t.barrelAngle);
+      if (this.flash > 0) ctx.filter = 'brightness(1.5)';
       ctx.drawImage(img, meta.ox ?? 0, meta.oy ?? 0, meta.w, meta.h, -w / 2, -h * 0.95, w, h * 0.95);
       ctx.restore();
-    }
-    // turret barrel: always visible, rotates toward target (or rests at default)
-    const aim = this.target ? this.angle : this.restAngle;
-    ctx.save();
-    ctx.rotate(aim);
-    // muzzle flash
-    if (this.flash > 0) {
+      // muzzle flash at the tip (in aim direction)
+      if (this.flash > 0 && this.t.barrelAngle !== undefined) {
+        ctx.save();
+        ctx.rotate(aim);
+        ctx.globalAlpha = Math.min(1, this.flash * 8);
+        ctx.fillStyle = '#fff3c0';
+        ctx.shadowColor = '#ffb060';
+        ctx.shadowBlur = 16;
+        ctx.beginPath();
+        ctx.arc(s + 10, 0, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    } else {
+      // Vector fallback (heli, or before sprite loads): base + rotating barrel.
       ctx.save();
-      ctx.globalAlpha = Math.min(1, this.flash * 8);
-      ctx.fillStyle = '#fff3c0';
-      ctx.shadowColor = '#ffb060';
-      ctx.shadowBlur = 14;
+      ctx.rotate(aim);
+      if (this.flash > 0) {
+        ctx.globalAlpha = Math.min(1, this.flash * 8);
+        ctx.fillStyle = '#fff3c0';
+        ctx.shadowColor = '#ffb060';
+        ctx.shadowBlur = 16;
+        ctx.beginPath();
+        ctx.arc(s + 12, 0, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      ctx.fillStyle = this.t.color;
+      ctx.fillRect(s * 0.2, -3.5, s + 8, 7);
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillRect(s * 0.2, -3.5, s * 0.35, 7);
+      ctx.fillStyle = this.t.color;
       ctx.beginPath();
-      ctx.arc(s + 12, 0, 7, 0, Math.PI * 2);
+      ctx.arc(0, 0, s * 0.62, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = '#e8e8e8';
+      ctx.fillRect(s + 5, -4.5, 5, 9);
       ctx.restore();
     }
-    // barrel body
-    ctx.fillStyle = this.t.color;
-    ctx.fillRect(s * 0.2, -3.5, s + 8, 7);
-    // barrel shroud (darker)
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.fillRect(s * 0.2, -3.5, s * 0.35, 7);
-    // turret dome
-    ctx.fillStyle = this.t.color;
-    ctx.beginPath();
-    ctx.arc(0, 0, s * 0.62, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    // barrel tip
-    ctx.fillStyle = '#e8e8e8';
-    ctx.fillRect(s + 5, -4.5, 5, 9);
-    ctx.restore();
 
     // level pips
     for (let i = 0; i < this.level; i++) {
