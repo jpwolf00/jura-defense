@@ -1,6 +1,14 @@
 import { pointAt, headingAt, PATH_LENGTH, WAYPOINTS } from './path.js';
 import { spriteImage, SPRITES } from './sprites.js';
 
+// Optional spritesheet metadata contract (additive; current single-frame assets
+// omit these fields and remain on the 9-arg drawImage path unchanged):
+//   meta.frames: horizontal frame count (> 1 activates the sheet path)
+//   meta.frameW: pixel width of one source frame (> 0 required)
+//   meta.frameH: optional source frame height (defaults to meta.h)
+//   meta.frameY: optional source-strip Y offset (defaults to 0)
+//   meta.frameMs: optional milliseconds per frame (or meta.frame_ms)
+
 export const ENEMY_TYPES = {
   raptor:  { hp: 34,  speed: 120, reward: 6,  radius: 15, color: '#7fa05a', name: 'Velociraptor', sprite: 'dino_raptor' },
   hadro:   { hp: 55,  speed: 70,  reward: 9,  radius: 18, color: '#b9a24a', name: 'Hadrosaur', sprite: 'dino_hadro' },
@@ -58,8 +66,17 @@ export class Enemy {
     this.hitFlash = 0;
     // animation clock
     this.animT = Math.random() * 100;
+    this.animClock = 0;
     this._img = null;
     if (t.sprite) spriteImage(t.sprite, (i) => { this._img = i; });
+    const _meta = t.sprite ? SPRITES[t.sprite] : null;
+    if (_meta && _meta.frames > 1 && _meta.frameW > 0) {
+      this._sheetFrames = _meta.frames;
+      this._sheetFrameW = _meta.frameW;
+      this._sheetFrameH = _meta.frameH || _meta.h;
+      this._sheetFrameY = _meta.frameY || 0;
+      this._sheetFrameMs = _meta.frameMs || _meta.frame_ms || 150;
+    }
     this._sync();
   }
 
@@ -104,6 +121,7 @@ export class Enemy {
     }
     this._sync();
     this.animT += dt * spd * 0.05;
+    this.animClock += dt * 1000;
     if (this.hitFlash > 0) this.hitFlash -= dt;
   }
 
@@ -180,9 +198,15 @@ export class Enemy {
       } else if (isSlowed) {
         ctx.filter = 'hue-rotate(160deg) saturate(1.4)';
       }
-      // 9-arg drawImage: crop the real sprite bounds (ox,oy,w,h) out of the
-      // 96×96 frame and draw it bottom-aligned to the ground point.
-      ctx.drawImage(img, meta.ox ?? 0, meta.oy ?? 0, meta.w, meta.h, -w / 2, -h, w, h);
+      if (this._sheetFrames > 1) {
+        const frameIdx = Math.floor(this.animClock / this._sheetFrameMs) % this._sheetFrames;
+        ctx.drawImage(img, frameIdx * this._sheetFrameW, this._sheetFrameY,
+          this._sheetFrameW, this._sheetFrameH, -w / 2, -h, w, h);
+      } else {
+        // 9-arg drawImage: crop the real sprite bounds (ox,oy,w,h) out of the
+        // 96×96 frame and draw it bottom-aligned to the ground point.
+        ctx.drawImage(img, meta.ox ?? 0, meta.oy ?? 0, meta.w, meta.h, -w / 2, -h, w, h);
+      }
 
       // A small stable directional motion cue; this is deliberately 2D and
       // sits behind the sprite, so it cannot alter the dino's perspective.
