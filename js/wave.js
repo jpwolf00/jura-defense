@@ -35,6 +35,16 @@ export class WaveManager {
   get totalWaves() { return this.waves.length; }
   get currentWave() { return this.index + 1; }
   get done() { return this.index >= this.waves.length && !this.active; }
+  get currentHint() {
+    const wave = this.waves[this.index];
+    if (!wave) return 'scout wave';
+    const types = wave.groups.map(g => g.type);
+    if (types.includes('trex')) return 'boss incoming';
+    if (types.includes('anky')) return 'armored incoming';
+    if (types.includes('trice')) return 'armored incoming';
+    if (types.includes('pterano')) return 'air incoming';
+    return 'scout wave';
+  }
 
   startNext() {
     if (this.done || this.active) return;

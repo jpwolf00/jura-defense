@@ -209,7 +209,7 @@ $startWave.addEventListener('click', () => {
   state.waveMgr.startNext();
   sfx.waveStart();
   state.fx.shake(0.3);
-  flashBanner(`Wave ${state.waveMgr.currentWave}`);
+  flashBanner(`Wave ${state.waveMgr.currentWave} — ${state.waveMgr.currentHint}`);
   syncHud();
 });
 
@@ -438,6 +438,7 @@ function spawn(type, scaleMult, order, spacing) {
   e.dist = offset;
   e.animT = Math.random() * 100;
   e._sync();
+  e.reward = Math.round(e.reward * (1 + 0.08 * (state.waveMgr.currentWave - 1)));
   state.enemies.push(e);
 }
 
