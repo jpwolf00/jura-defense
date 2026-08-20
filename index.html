@@ -92,21 +92,21 @@
   #sidebar {
     background: var(--panel);
     border-left: 1px solid var(--line);
-    padding: 14px;
+    padding: 10px;
     padding-bottom: max(14px, env(safe-area-inset-bottom));
-    display: flex; flex-direction: column; gap: 12px;
+    display: flex; flex-direction: column; gap: 8px;
     overflow-y: auto;
   }
   #sidebar h2 {
     font-size: 12px; margin: 0; letter-spacing: .12em; text-transform: uppercase;
     color: var(--muted);
   }
-  #towerShop { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  #towerShop { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .shopCard {
     background: var(--panel-2);
     border: 1px solid var(--line); border-radius: 10px;
-    padding: 10px; cursor: pointer; user-select: none;
-    display: flex; flex-direction: column; gap: 4px;
+    padding: 8px; cursor: pointer; user-select: none;
+    display: flex; flex-direction: column; gap: 3px;
     transition: border-color .12s;
   }
   .shopCard:hover { border-color: var(--accent); }
@@ -117,9 +117,37 @@
   .shopCard .desc { font-size: 11px; color: var(--muted); line-height: 1.3; }
   #info {
     background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
-    padding: 12px; font-size: 12px; color: var(--muted); line-height: 1.5;
+    padding: 10px; font-size: 12px; color: var(--muted); line-height: 1.4;
+    display: flex; flex-direction: column; gap: 6px;
   }
   #info b { color: var(--text); }
+  #info .head {
+    font-size: 13px; font-weight: 700; color: var(--text);
+    letter-spacing: .02em; margin-bottom: 2px;
+  }
+  #info .desc {
+    font-size: 11px; color: var(--muted); line-height: 1.35;
+  }
+  #info .row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 12px; color: var(--muted);
+  }
+  #info .row b { color: var(--text); font-variant-numeric: tabular-nums; }
+  #info .actions {
+    display: flex; gap: 8px; margin-top: 4px;
+  }
+  #info .actions button {
+    flex: 1; padding: 6px 8px; font-size: 12px;
+    border-radius: 6px;
+  }
+  #info .actions .sell {
+    border-color: #5a3a30; color: #e0a090;
+  }
+  #info .actions .sell:hover { background: #3a2a24; }
+  #info .actions .upgrade {
+    border-color: var(--accent); color: var(--accent); font-weight: 600;
+  }
+  #info .actions .upgrade:hover { background: #2b3d30; }
   #waveBanner {
     position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     pointer-events: none; opacity: 0; transition: opacity .3s;
@@ -163,7 +191,7 @@
   .key { display: inline-block; background: var(--panel-2); border: 1px solid var(--line);
          border-radius: 5px; padding: 1px 6px; font-family: monospace; color: var(--text); }
   .shopCard .icon {
-    width: 40px; height: 40px; object-fit: contain; display: block;
+    width: 32px; height: 32px; object-fit: contain; display: block;
     margin: 0 auto 2px; pointer-events: none;
   }
   .shopCard.selected .icon { filter: brightness(1.3) drop-shadow(0 0 4px rgba(224,164,88,.6)); }

@@ -144,12 +144,21 @@ function updateInfo() {
   const tw = state.selectedTower;
   if (tw) {
     const upCost = tw.upgradeCost();
+    const rateLine = tw.t.rate ? `<div class="row"><span>Rate</span><b>${tw.t.rate}s</b></div>` : '';
+    const targetName = (tw.target && !tw.target.dead) ? tw.target.t.name : 'No target in range';
     $info.innerHTML = `
-      <b>${tw.t.name}</b> — Lv ${tw.level}
-      <br/>Dmg <b>${Math.round(tw.dmg)}</b> · Range <b>${tw.range}</b>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button id="upBtn" ${tw.canUpgrade() ? '' : 'disabled'}>⬆ Upgrade (${upCost})</button>
-        <button id="sellBtn">Sell (+${tw.sellValue()})</button>
+      <div class="card">
+        <div class="head"><b>${tw.t.name}</b><span>Lv ${tw.level}</span></div>
+        <div class="desc">${tw.t.desc}</div>
+        <div class="row"><span>Damage</span><b>${Math.round(tw.dmg)}</b></div>
+        <div class="row"><span>Range</span><b>${tw.range}</b></div>
+        ${rateLine}
+        <div class="row"><span>Target</span><b>${targetName}</b></div>
+        <div class="row"><span>Upgrade</span><b>${tw.canUpgrade() ? upCost : 'Max Level'}</b></div>
+        <div class="actions">
+          <button id="upBtn" ${tw.canUpgrade() ? '' : 'disabled'}>⬆ Upgrade (${upCost})</button>
+          <button id="sellBtn">Sell (+${tw.sellValue()})</button>
+        </div>
       </div>`;
     const up = document.getElementById('upBtn');
     const sell = document.getElementById('sellBtn');
