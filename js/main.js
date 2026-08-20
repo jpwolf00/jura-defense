@@ -199,6 +199,11 @@ function infoCacheKey() {
   return { tower: tw, target: tg, dead: tg ? tg.dead : null };
 }
 
+// A wave is clearing once spawning has finished but living enemies remain.
+function waveClearing() {
+  return !state.waveMgr.active && state.enemies.length > 0;
+}
+
 // ---------------------------------------------------------------- HUD
 function syncHud() {
   $money.textContent = Math.floor(state.money);
@@ -208,9 +213,11 @@ function syncHud() {
   $meteor.textContent = state.meteor.charges;
   $meteorBtn.classList.toggle('ready', state.meteor.ready);
   $meteorBtn.classList.toggle('targeting', state.meteorTargeting);
-  $startWave.disabled = state.waveMgr.active || state.waveMgr.done;
+  const clearing = waveClearing();
+  $startWave.disabled = state.waveMgr.active || state.waveMgr.done || clearing;
   $startWave.textContent = state.waveMgr.done ? '✓ Done'
-    : (state.waveMgr.active ? '▶ Running' : '▶ Start');
+    : (state.waveMgr.active ? '▶ Running'
+      : (clearing ? 'Clearing…' : '▶ Start'));
   $ffwdBtn.classList.toggle('active', state.timeScale === 2);
   $ffwdBtn.textContent = state.timeScale === 2 ? '2×' : '1×';
   $pauseBtn.textContent = state.paused ? '▶' : '⏸';
@@ -234,6 +241,7 @@ function syncHud() {
 // ---------------------------------------------------------------- actions
 $startWave.addEventListener('click', () => {
   if (state.over || state.started === false) return;
+  if (state.waveMgr.active || state.waveMgr.done || waveClearing()) return;
   state.spawnOrder = 0;
   state.waveMgr.startNext();
   sfx.waveStart();

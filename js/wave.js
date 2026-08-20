@@ -86,7 +86,6 @@ export class WaveManager {
       this.active = false;
       this.index++;
       this.between = true;
-      if (this.index >= this.waves.length) this.done = true;
       if (onWaveComplete) onWaveComplete(this.index);
     }
   }
