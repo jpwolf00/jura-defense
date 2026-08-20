@@ -106,6 +106,19 @@ for (const [id, t] of Object.entries(TOWER_TYPES)) {
   card.innerHTML = `<div class="name">${t.name}</div>
     <div class="cost">💰 ${t.cost}</div>
     <div class="desc">${t.desc}</div>`;
+  // Tower artwork thumbnail from the embedded sprite (or emoji fallback).
+  const icon = document.createElement('img');
+  icon.className = 'icon';
+  icon.alt = t.name;
+  if (t.sprite) {
+    const im = spriteImage(t.sprite);
+    if (im) icon.src = im.src;
+  } else if (t.emoji) {
+    // No raster sprite — use an emoji rendered as a data-URI SVG.
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><text y='36' font-size='36' text-anchor='middle' x='24'>${t.emoji}</text></svg>`;
+    icon.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+  }
+  if (icon.src) card.prepend(icon);
   card.addEventListener('click', () => selectBuild(id));
   $shop.appendChild(card);
 }
@@ -174,11 +187,12 @@ function syncHud() {
   $waveMax.textContent = state.waveMgr.totalWaves;
   $meteor.textContent = state.meteor.charges;
   $meteorBtn.classList.toggle('ready', state.meteor.ready);
+  $meteorBtn.classList.toggle('targeting', state.meteorTargeting);
   $startWave.disabled = state.waveMgr.active || state.waveMgr.done;
   $startWave.textContent = state.waveMgr.done ? '✓ Done'
-    : (state.waveMgr.active ? '▶ Wave running' : '▶ Start Wave');
+    : (state.waveMgr.active ? '▶ Running' : '▶ Start');
   $ffwdBtn.classList.toggle('active', state.timeScale === 2);
-  $ffwdBtn.textContent = state.timeScale === 2 ? '⏩ 2×' : '⏩ 1×';
+  $ffwdBtn.textContent = state.timeScale === 2 ? '2×' : '1×';
   $pauseBtn.textContent = state.paused ? '▶' : '⏸';
   $pauseBadge.classList.toggle('show', state.paused);
   $era.textContent = state.enemies.length ? `🦖 ×${state.enemies.length}` : 'Cretaceous';

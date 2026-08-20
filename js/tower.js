@@ -8,7 +8,7 @@ export const TOWER_TYPES = {
   fence:  { name: 'Volt Fence',    cost: 130, range: 90,  rate: 1.1,  dmg: 14, color: '#58c8a0',
             desc: 'Pulses: hits EVERYTHING in range.', kind: 'aoe', sprite: 'tower_aoe' },
   heli:   { name: 'Heli Gunner',   cost: 220, range: 280, rate: 1.6,  dmg: 48, color: '#b05858',
-            desc: 'Long range, heavy hits.', kind: 'single', sprite: null },
+            desc: 'Long range, heavy hits.', kind: 'single', sprite: null, emoji: '🚁' },
   chrono: { name: 'Chrono Turret', cost: 260, range: 200, rate: 1.4,  dmg: 10, color: '#8a58c8',
             desc: 'Time-dilation: slows 55% for 3s.', kind: 'single', slow: 0.45, slowDur: 3, sprite: 'tower_chrono' },
 };
