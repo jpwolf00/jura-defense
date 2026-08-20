@@ -133,6 +133,7 @@ export class Enemy {
     const aspect = hasSprite ? meta.w / meta.h : 1;
     const h = hasSprite ? Math.max(r * 4.5, 62) : Math.max(r * 2.6, 36);
     const w = h * aspect;
+    const isSlowed = this.slowUntil > performance.now();
     ctx.save();
     ctx.translate(this.x, this.y);
 
@@ -174,7 +175,11 @@ export class Enemy {
       ctx.rotate(tilt);
       const flapScale = motion.flap > 0 ? 1 + Math.sin(phase) * motion.flap : 1;
       ctx.scale(1 + Math.abs(step) * motion.squash * 0.45, squash * flapScale);
-      if (this.hitFlash > 0) ctx.filter = 'brightness(2.2)';
+      if (this.hitFlash > 0) {
+        ctx.filter = isSlowed ? 'brightness(2.2) hue-rotate(160deg) saturate(1.4)' : 'brightness(2.2)';
+      } else if (isSlowed) {
+        ctx.filter = 'hue-rotate(160deg) saturate(1.4)';
+      }
       // 9-arg drawImage: crop the real sprite bounds (ox,oy,w,h) out of the
       // 96×96 frame and draw it bottom-aligned to the ground point.
       ctx.drawImage(img, meta.ox ?? 0, meta.oy ?? 0, meta.w, meta.h, -w / 2, -h, w, h);
@@ -204,7 +209,9 @@ export class Enemy {
       // --- vector fallback (placeholder art until sprite loads) ---
       ctx.rotate(this.heading);
       // body
-      ctx.fillStyle = this.hitFlash > 0 ? '#ffffff' : t.color;
+      let bodyColor = this.hitFlash > 0 ? '#ffffff' : t.color;
+      if (isSlowed && this.hitFlash <= 0) bodyColor = '#5ac8d8';
+      ctx.fillStyle = bodyColor;
       ctx.beginPath();
       ctx.ellipse(0, 0, r, r * 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -221,7 +228,9 @@ export class Enemy {
       ctx.fill();
       // legs (walk cycle)
       const step = Math.sin(this.animT) * r * 0.3;
-      ctx.strokeStyle = this.hitFlash > 0 ? '#fff' : shade(t.color, -25);
+      let legColor = this.hitFlash > 0 ? '#fff' : shade(t.color, -25);
+      if (isSlowed && this.hitFlash <= 0) legColor = '#3a98a8';
+      ctx.strokeStyle = legColor;
       ctx.lineWidth = r * 0.25;
       ctx.beginPath();
       ctx.moveTo(-r * 0.3, r * 0.5);
@@ -248,6 +257,44 @@ export class Enemy {
     ctx.fillRect(this.x - barW / 2, barY, barW, 5);
     ctx.fillStyle = ratio > 0.4 ? '#6fbf73' : '#d0563f';
     ctx.fillRect(this.x - barW / 2, barY, barW * ratio, 5);
+
+    // Armor badge: compact gold shield with value, shown only for armored types
+    if (this.armor > 0) {
+      const bx = this.x + barW / 2 + 8;
+      const by = barY + 2.5;
+      ctx.save();
+      ctx.fillStyle = '#d4a017';
+      ctx.strokeStyle = '#8a6010';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(bx, by - 5);
+      ctx.lineTo(bx + 5, by - 3);
+      ctx.lineTo(bx + 5, by + 1);
+      ctx.lineTo(bx, by + 5);
+      ctx.lineTo(bx - 5, by + 1);
+      ctx.lineTo(bx - 5, by - 3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 8px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(this.armor), bx, by);
+      ctx.restore();
+    }
+
+    // Slow ring: subtle cyan indicator around slowed enemies
+    if (isSlowed) {
+      ctx.save();
+      ctx.globalAlpha = 0.45;
+      ctx.strokeStyle = '#5ac8d8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, r + 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 }
 
