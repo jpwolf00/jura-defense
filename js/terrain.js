@@ -90,6 +90,38 @@ function makeTerrainCanvas(w, h) {
     }
   }
 
+  // Larger, deterministic ground features make the field read as terrain rather
+  // than a low-contrast color wash. This is part of the cached canvas.
+  const featureStep = 180;
+  for (let fy = 90; fy < h; fy += featureStep) {
+    for (let fx = 90; fx < w; fx += featureStep) {
+      const n = hash(fx + 700, fy + 900);
+      if (n < 0.34) continue;
+      const type = Math.floor(n * 9) % 3;
+      const rx = 34 + Math.floor(hash(fx + 3, fy + 5) * 28);
+      const ry = 20 + Math.floor(hash(fx + 7, fy + 11) * 18);
+      c.save();
+      c.translate(fx + (n - 0.5) * 34, fy + (hash(fx, fy + 13) - 0.5) * 28);
+      c.rotate((n - 0.5) * 0.5);
+      c.fillStyle = type === 0
+        ? 'rgba(92,126,65,0.16)'
+        : type === 1 ? 'rgba(151,111,68,0.15)' : 'rgba(112,110,96,0.17)';
+      c.strokeStyle = type === 0
+        ? 'rgba(58,87,46,0.16)'
+        : type === 1 ? 'rgba(105,72,43,0.16)' : 'rgba(72,72,65,0.16)';
+      c.lineWidth = 2;
+      c.beginPath();
+      for (let v = 0; v < 7; v++) {
+        const a = (v / 7) * Math.PI * 2;
+        const r = 0.82 + hash(fx + v * 19, fy + v * 23) * 0.3;
+        const px = Math.cos(a) * rx * r, py = Math.sin(a) * ry * r;
+        if (v === 0) c.moveTo(px, py); else c.lineTo(px, py);
+      }
+      c.closePath(); c.fill(); c.stroke();
+      c.restore();
+    }
+  }
+
   // Sparse environmental detail — recognizable grass tufts and rocks instead
   // of fine grain, so the field reads as "alive" without looking noisy.
   const decorate = (gx, gy) => {
@@ -118,6 +150,17 @@ function makeTerrainCanvas(w, h) {
       c.fillStyle = 'rgba(0,0,0,0.12)';
       c.beginPath();
       c.ellipse(px + 1, py + 1, 2, 1.2, 0, 0, Math.PI * 2);
+      c.fill();
+    } else if (n > 0.935) {
+      // Occasional larger landmark rock; deterministic and sparse.
+      const radius = 7 + Math.floor(hash(gx + 17, gy + 31) * 6);
+      c.fillStyle = rgbStr(shade([88, 84, 72], -4 + Math.floor(n * 12)));
+      c.beginPath();
+      c.ellipse(px, py, radius, radius * 0.62, -0.15, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = 'rgba(0,0,0,0.18)';
+      c.beginPath();
+      c.ellipse(px + 2, py + 2, radius * 0.62, radius * 0.3, -0.15, 0, Math.PI * 2);
       c.fill();
     }
   };
@@ -161,6 +204,20 @@ export function renderGamePath(ctx, waypoints, lineWidth = 52) {
   path(ctx, waypoints);
   ctx.stroke();
   ctx.globalAlpha = 1;
+  // Subtle worn ruts make the route read as a physical trail rather than a
+  // flat graphic stroke. Keep them sparse and low contrast for enemy clarity.
+  ctx.strokeStyle = 'rgba(48,36,25,0.32)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([16, 24]);
+  path(ctx, waypoints);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle = 'rgba(205,166,103,0.18)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([8, 18]);
+  path(ctx, waypoints);
+  ctx.stroke();
+  ctx.setLineDash([]);
   ctx.restore();
 }
 
