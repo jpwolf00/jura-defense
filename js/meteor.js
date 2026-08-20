@@ -38,6 +38,7 @@ export class MeteorCall {
     if (!this.target.impacted && this.target.t >= METEOR.telegraph) {
       this.target.impacted = true;
       this._blast(enemies, fx, game);
+      fx.scorch(this.target.x, this.target.y, METEOR.radius * 0.55);
       this.target = null;
     }
   }
@@ -63,6 +64,26 @@ export class MeteorCall {
     if (!this.target) return;
     const { x, y, t } = this.target;
     const prog = Math.min(1, t / METEOR.telegraph);
+
+    // Growing impact shadow beneath the falling meteor.
+    ctx.save();
+    const shadowR = 12 + (METEOR.radius * 0.55 - 12) * prog;
+    const sg = ctx.createRadialGradient(x, y, 0, x, y, shadowR);
+    sg.addColorStop(0, 'rgba(0,0,0,0.55)');
+    sg.addColorStop(0.7, 'rgba(0,0,0,0.35)');
+    sg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sg;
+    ctx.beginPath();
+    ctx.arc(x, y, shadowR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.35 * prog;
+    ctx.strokeStyle = '#ff8a3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, shadowR * 0.85, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
 
     // growing target reticle
     ctx.save();

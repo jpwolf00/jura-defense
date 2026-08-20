@@ -9,6 +9,7 @@ export class FX {
     this.shockwaves = [];   // kill shockwave rings
     this.particles = [];
     this.floaters = [];
+    this.scorches = [];      // short-lived scorched ground marks
     this.shakeT = 0;
     this.shakeMag = 0;
     this.rewind = 0;
@@ -94,6 +95,11 @@ export class FX {
     }
   }
 
+  // Scorched ground mark: fades over ~2s, drawn before other effects.
+  scorch(x, y, r) {
+    this.scorches.push({ x, y, r, t: 0, dur: 2 });
+  }
+
   floater(x, y, text, color) {
     this.floaters.push({ x, y, text, color, t: 0, dur: 0.9 });
   }
@@ -110,6 +116,7 @@ export class FX {
     this.explosions = this.explosions.filter(e => (e.t += dt) < e.dur);
     this.flashes = this.flashes.filter(f => (f.t += dt) < f.dur);
     this.shockwaves = this.shockwaves.filter(s => (s.t += dt) < s.dur);
+    this.scorches = this.scorches.filter(s => (s.t += dt) < s.dur);
     this.particles = this.particles.filter(p => {
       p.t += dt;
       p.x += p.vx * dt;
@@ -134,6 +141,28 @@ export class FX {
   }
 
   draw(ctx) {
+    // Scorches sit beneath units and transient effects.
+    for (const s of this.scorches) {
+      const k = s.t / s.dur;
+      ctx.save();
+      ctx.globalAlpha = 0.5 * (1 - k);
+      const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r);
+      g.addColorStop(0, 'rgba(20,12,8,0.9)');
+      g.addColorStop(0.6, 'rgba(40,24,14,0.6)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.4 * (1 - k);
+      ctx.strokeStyle = '#ff8a3c';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r * 0.9, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
     // pulses (aoe rings)
     for (const p of this.pulses) {
       const k = p.t / p.dur;
