@@ -260,6 +260,7 @@ $meteorBtn.addEventListener('click', () => {
   if (state.meteorTargeting) {
     $info.innerHTML = `☄️ <b>Meteor Call</b> — click anywhere to drop the rock.<br/><i>(M to cancel)</i>`;
   }
+  syncHud();
 });
 
 function togglePause() {
@@ -451,6 +452,7 @@ window.addEventListener('keydown', (e) => {
     state.selectedTower = null;
     refreshShop();
     updateInfo();
+    syncHud();
   }
 });
 
