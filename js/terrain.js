@@ -1,3 +1,6 @@
+import { generateMapLayout } from './map-layout.js';
+import { WAYPOINTS, SLOTS } from './path.js';
+
 // Terrain-first board renderer for Jura Defense gameplay.
 // Produces a clear, non-photoreal Jurassic battlefield backdrop.
 
@@ -77,6 +80,32 @@ _terrainPlate.onload = () => {
   _terrainCache = null;
 };
 _terrainPlate.src = new URL('../assets/terrain_bg.png', import.meta.url).href;
+
+function drawLayoutFeatures(c, w, h) {
+  const layout = generateMapLayout(1337, WAYPOINTS, SLOTS, 1280, 720);
+  const sx = w / 1280, sy = h / 720, scale = Math.min(sx, sy);
+  const items = [...layout.ground, ...layout.decorations].sort((a, b) => a.zIndex - b.zIndex);
+  for (const item of items) {
+    c.save();
+    c.translate(item.x * sx, item.y * sy);
+    c.rotate(item.rotation);
+    c.scale(item.scale * scale, item.scale * scale);
+    if (item.kind === 'mud') {
+      c.fillStyle = 'rgba(102,70,45,0.13)'; c.beginPath(); c.ellipse(0, 0, 18, 9, 0, 0, Math.PI * 2); c.fill();
+    } else if (item.kind === 'stone' || item.kind === 'rock') {
+      c.fillStyle = 'rgba(80,76,67,0.22)'; c.beginPath(); c.ellipse(0, 0, 8, 5, 0, 0, Math.PI * 2); c.fill();
+    } else if (item.kind === 'grass' || item.kind === 'fern' || item.kind === 'cycad') {
+      c.strokeStyle = 'rgba(54,102,52,0.2)'; c.lineWidth = 1.5; c.beginPath();
+      for (let i = -2; i <= 2; i++) { c.moveTo(i * 2, 2); c.lineTo(i * 3, -8 - Math.abs(i)); }
+      c.stroke();
+    } else if (item.kind === 'log') {
+      c.fillStyle = 'rgba(91,62,42,0.22)'; c.fillRect(-11, -3, 22, 6);
+    } else if (item.kind === 'puddle') {
+      c.fillStyle = 'rgba(66,128,153,0.14)'; c.beginPath(); c.ellipse(0, 0, 13, 5, 0, 0, Math.PI * 2); c.fill();
+    }
+    c.restore();
+  }
+}
 
 function makeTerrainCanvas(w, h) {
   const C = (typeof OffscreenCanvas !== 'undefined')
@@ -176,6 +205,7 @@ function makeTerrainCanvas(w, h) {
       decorate(gx, gy);
     }
   }
+  drawLayoutFeatures(c, w, h);
   return C;
 }
 
