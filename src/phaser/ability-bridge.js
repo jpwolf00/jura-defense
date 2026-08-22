@@ -47,10 +47,6 @@ export class AbilityBridge {
     this.chronoMeter = null;
     this.chronoReady = false;
 
-    // Test hooks: track reticle and target positions for regression assertions
-    this._reticlePos = { x: 0, y: 0 };
-    this._lastImpactPos = null;
-
     this._createPresentation();
   }
 
@@ -97,7 +93,6 @@ export class AbilityBridge {
   // Update reticle position during targeting
   updateMeteorReticle(x, y) {
     if (!this.meteorTargeting || !this.meteorReticle) return;
-    this._reticlePos = { x, y };
     this.meteorReticle.clear();
     this.meteorReticle.lineStyle(2, 0xe0a458, 0.35);
     this.meteorReticle.strokeCircle(x, y, METEOR.radius);
@@ -111,7 +106,6 @@ export class AbilityBridge {
       this.meteorTargeting = false;
       this.meteorReticle?.setVisible(false);
       this._lastMeteorTarget = { x, y };
-      this._lastImpactPos = { x, y };
       // P3-05: FX + audio
       this._fxSystem?.meteorTelegraph(x, y);
       this._audio?.play('fx-meteorTelegraph');
@@ -274,8 +268,6 @@ export class AbilityBridge {
         targeting: this.meteorTargeting,
         ready: this.meteor.ready,
         hasTarget: !!this.meteor.target,
-        reticlePos: this._reticlePos,
-        lastImpactPos: this._lastImpactPos,
       },
       chrono: {
         charge: this.chrono.charge,

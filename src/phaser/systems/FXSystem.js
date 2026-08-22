@@ -16,82 +16,28 @@ const TOWER_COLORS = {
   chrono: 0xab47bc, // purple
 };
 
-// FX density management: max concurrent effects per category
-const MAX_CONCURRENT = {
-  muzzle: 12,
-  hit: 20,
-  death: 8,
-  meteor: 3,
-  chrono: 2,
-};
-
 export default class FXSystem extends Phaser.Plugins.BasePlugin {
   constructor(scene) {
     super(scene);
     this._registry = [];
-    this._counts = { muzzle: 0, hit: 0, death: 0, meteor: 0, chrono: 0 };
   }
 
   /* ── helpers ──────────────────────────────────────────────────────── */
 
-  _track(obj, timeoutMs, category) {
-    if (category && this._counts[category] !== undefined) {
-      this._counts[category]++;
-    }
-    this._registry.push({ obj, category, timer: this.scene.time.delayedCall(timeoutMs, () => {
+  _track(obj, timeoutMs) {
+    this._registry.push({ obj, timer: this.scene.time.delayedCall(timeoutMs, () => {
       if (obj && !obj.destroyed && obj.destroy) obj.destroy();
       const idx = this._registry.findIndex((r) => r.obj === obj);
-      if (idx !== -1) {
-        const entry = this._registry[idx];
-        if (entry.category && this._counts[entry.category] !== undefined) {
-          this._counts[entry.category]--;
-        }
-        this._registry.splice(idx, 1);
-      }
+      if (idx !== -1) this._registry.splice(idx, 1);
     }) });
-  }
-
-  _canSpawn(category) {
-    if (!category || this._counts[category] === undefined) return true;
-    return this._counts[category] < MAX_CONCURRENT[category];
   }
 
   /* ── Muzzle flash ─────────────────────────────────────────────────── */
 
   /** @param {number} x  @param {number} y  @param {string} towerType */
   muzzleFlash(x, y, towerType) {
-    if (!this._canSpawn('muzzle')) return;
     const color = TOWER_COLORS[towerType] || 0xffffff;
-    
-    // Distinct firing signatures per tower type
-    let size, scaleTarget, duration;
-    switch (towerType) {
-      case 'tranq': // Green tranquilizer dart - sharp burst
-        size = 12;
-        scaleTarget = 2.2;
-        duration = 180;
-        break;
-      case 'drone': // Blue laser - tight focused beam
-        size = 8;
-        scaleTarget = 1.5;
-        duration = 150;
-        break;
-      case 'aoe': // Red explosive - wide blast
-        size = 18;
-        scaleTarget = 2.8;
-        duration = 250;
-        break;
-      case 'chrono': // Purple time distortion - pulsing ring
-        size = 14;
-        scaleTarget = 2.0;
-        duration = 220;
-        break;
-      default:
-        size = 10;
-        scaleTarget = 1.8;
-        duration = 200;
-    }
-    
+    const size = towerType === 'heli' ? 16 : towerType === 'fence' ? 24 : 10;
     const flash = this.scene.add.circle(x, y, size, color)
       .setAlpha(0.9)
       .setScrollFactor(0)
@@ -100,34 +46,27 @@ export default class FXSystem extends Phaser.Plugins.BasePlugin {
 
     this.scene.tweens.add({
       targets: flash,
-      scaleX: scaleTarget,
-      scaleY: scaleTarget,
+      scaleX: towerType === 'fence' ? 2.5 : 1.8,
+      scaleY: towerType === 'fence' ? 2.5 : 1.8,
       alpha: 0,
-      duration: duration,
+      duration: towerType === 'fence' ? 300 : 200,
       ease: 'Power2',
       onComplete: () => { flash.destroy(); },
     });
-    this._track(flash, duration + 50, 'muzzle');
+    this._track(flash, 350);
   }
 
   /* ── Hit flash ────────────────────────────────────────────────────── */
 
   /** @param {number} x  @param {number} y
    *  @param {'normal'|'slow'|'armorBreak'} status
-   *  @param {number} [damage] - optional damage value for scaling feedback
    */
-  hitFlash(x, y, status, damage) {
-    if (!this._canSpawn('hit')) return;
+  hitFlash(x, y, status) {
     const isSlow = status === 'slow';
     const isArmor = status === 'armorBreak';
     const color = isSlow ? 0x00e5ff : isArmor ? 0xff9800 : 0xffffff;
-    const baseRadius = isSlow ? 22 : 14;
+    const radius = isSlow ? 22 : 14;
     const dur = isSlow ? 500 : isArmor ? 400 : 250;
-
-    // Scale feedback with damage (if provided)
-    const damageScale = damage ? Math.min(2.5, 1 + damage / 50) : 1;
-    const radius = baseRadius * damageScale;
-    const scale = (isSlow ? 4 : 3) * damageScale;
 
     const ring = this.scene.add.circle(x, y, radius, color)
       .setAlpha(0.8)
@@ -137,14 +76,14 @@ export default class FXSystem extends Phaser.Plugins.BasePlugin {
 
     this.scene.tweens.add({
       targets: ring,
-      scaleX: scale,
-      scaleY: scale,
+      scaleX: isSlow ? 4 : 3,
+      scaleY: isSlow ? 4 : 3,
       alpha: 0,
       duration: dur,
       ease: 'Cubic.easeOut',
       onComplete: () => { ring.destroy(); },
     });
-    this._track(ring, dur + 50, 'hit');
+    this._track(ring, dur + 50);
 
     if (isArmor) {
       this.damageNumber(x, y - 15, 'ARMOR BROKEN', 0xff9800);
@@ -181,7 +120,6 @@ export default class FXSystem extends Phaser.Plugins.BasePlugin {
 
   /** @param {number} x  @param {number} y  @param {string} species */
   deathExplosion(x, y, species) {
-    if (!this._canSpawn('death')) return;
     const isBig = species === 'trex';
     const count = isBig ? 24 : species === 'pterano' ? 14 : 8;
     const pSize = isBig ? 8 : 3;
@@ -200,14 +138,13 @@ export default class FXSystem extends Phaser.Plugins.BasePlugin {
     this.scene.time.delayedCall(dur + 50, () => {
       if (emitter.destroy) emitter.destroy();
     });
-    this._track(emitter, dur + 100, 'death');
+    this._track(emitter, dur + 100);
   }
 
   /* ── Slow ripple ──────────────────────────────────────────────────── */
 
   /** @param {number} x  @param {number} y */
   slowRipple(x, y) {
-    if (!this._canSpawn('hit')) return;
     const ring = this.scene.add.circle(x, y, 5, 0x00e5ff)
       .setAlpha(0.6)
       .setStrokeStyle(2, 0x00e5ff)
@@ -223,15 +160,14 @@ export default class FXSystem extends Phaser.Plugins.BasePlugin {
       ease: 'Cubic.easeOut',
       onComplete: () => { ring.destroy(); },
     });
-    this._track(ring, 700, 'hit');
+    this._track(ring, 700);
   }
 
   /* ── Meteor telegraph ─────────────────────────────────────────────── */
 
   /** @param {number} x  @param {number} y */
   meteorTelegraph(x, y) {
-    if (!this._canSpawn('meteor')) return;
-    // Warning ring - expands smoothly
+    // Warning ring
     const ring = this.scene.add.circle(x, y, 10, 0xff5722)
       .setAlpha(0.8)
       .setStrokeStyle(3, 0xff5722)
@@ -247,11 +183,11 @@ export default class FXSystem extends Phaser.Plugins.BasePlugin {
       ease: 'Cubic.easeIn',
       onComplete: () => { ring.destroy(); },
     });
-    this._track(ring, 1600, 'meteor');
+    this._track(ring, 1600);
 
-    // Shadow ellipse - smoothly grows and darkens
+    // Shadow ellipse
     const shadow = this.scene.add.ellipse(x, y, 20, 20, 0x000000)
-      .setAlpha(0.3)
+      .setAlpha(0.4)
       .setScrollFactor(0)
       .setDepth(240);
 
@@ -259,19 +195,18 @@ export default class FXSystem extends Phaser.Plugins.BasePlugin {
       targets: shadow,
       scaleX: 8,
       scaleY: 8,
-      alpha: 0.6, // Darkens as it grows
+      alpha: 0.1,
       duration: 1500,
       ease: 'Cubic.easeIn',
       onComplete: () => { shadow.destroy(); },
     });
-    this._track(shadow, 1600, 'meteor');
+    this._track(shadow, 1600);
   }
 
   /* ── Meteor impact ────────────────────────────────────────────────── */
 
   /** @param {number} x  @param {number} y */
   meteorImpact(x, y) {
-    if (!this._canSpawn('meteor')) return;
     // Central flash
     const flash = this.scene.add.circle(x, y, 5, 0xffeb3b)
       .setAlpha(1)
@@ -288,7 +223,7 @@ export default class FXSystem extends Phaser.Plugins.BasePlugin {
       ease: 'Power2',
       onComplete: () => { flash.destroy(); },
     });
-    this._track(flash, 450, 'meteor');
+    this._track(flash, 450);
 
     // Fire ring particles
     const fire = this.scene.add.particles(0, 0, {
@@ -304,13 +239,13 @@ export default class FXSystem extends Phaser.Plugins.BasePlugin {
     this.scene.time.delayedCall(900, () => {
       if (fire.destroy) fire.destroy();
     });
-    this._track(fire, 950, 'meteor');
+    this._track(fire, 950);
 
-    // Scorch mark - lingers ~2s
+    // Scorch mark
     this.scorchMark(x, y);
 
-    // Screen shake - brief but impactful
-    this.scene.cameras.main.shake(200, 0.015);
+    // Screen shake
+    this.scene.cameras.main.shake(200, 0.01);
   }
 
   /* ── Scorch mark ──────────────────────────────────────────────────── */
@@ -336,12 +271,9 @@ export default class FXSystem extends Phaser.Plugins.BasePlugin {
 
   /** @param {number} x  @param {number} y */
   chronoRing(x, y) {
-    if (!this._canSpawn('chrono')) return;
-    
-    // Clock-wipe effect: expanding ring with clock-hand sweep
-    const ring = this.scene.add.circle(x, y, 5, 0xab47bc)
+    const ring = this.scene.add.circle(x, y, 5, 0x66e0ff)
       .setAlpha(0.7)
-      .setStrokeStyle(3, 0xab47bc)
+      .setStrokeStyle(3, 0x66e0ff)
       .setScrollFactor(0)
       .setDepth(290);
 
@@ -354,45 +286,7 @@ export default class FXSystem extends Phaser.Plugins.BasePlugin {
       ease: 'Cubic.easeOut',
       onComplete: () => { ring.destroy(); },
     });
-    this._track(ring, 1100, 'chrono');
-
-    // Clock hand sweep (distinct from pause)
-    const hand = this.scene.add.rectangle(x, y, 2, 20, 0xab47bc)
-      .setOrigin(0.5, 1)
-      .setAlpha(0.8)
-      .setScrollFactor(0)
-      .setDepth(295);
-
-    this.scene.tweens.add({
-      targets: hand,
-      angle: 360,
-      alpha: 0,
-      duration: 1000,
-      ease: 'Cubic.easeOut',
-      onComplete: () => { hand.destroy(); },
-    });
-    this._track(hand, 1100, 'chrono');
-
-    // Purple tint overlay (brief)
-    const tint = this.scene.add.rectangle(
-      this.scene.scale.width / 2,
-      this.scene.scale.height / 2,
-      this.scene.scale.width,
-      this.scene.scale.height,
-      0xab47bc
-    )
-      .setAlpha(0.15)
-      .setScrollFactor(0)
-      .setDepth(285);
-
-    this.scene.tweens.add({
-      targets: tint,
-      alpha: 0,
-      duration: 800,
-      ease: 'Power2',
-      onComplete: () => { tint.destroy(); },
-    });
-    this._track(tint, 900, 'chrono');
+    this._track(ring, 1100);
   }
 
   /* ── Screen shake ─────────────────────────────────────────────────── */
@@ -476,29 +370,6 @@ export default class FXSystem extends Phaser.Plugins.BasePlugin {
       onComplete: () => { cross.destroy(); },
     });
     this._track(cross, 500);
-  }
-
-  /* ── Projectile trail ─────────────────────────────────────────────── */
-
-  /** Draw a color-coded trail for a projectile
-   * @param {object} projectile - the projectile with x, y coordinates
-   * @param {string} towerType - tower type for color coding
-   * @returns {Phaser.GameObjects.Graphics} graphics object to destroy when projectile expires
-   */
-  drawProjectileTrail(projectile, towerType) {
-    const color = TOWER_COLORS[towerType] || 0xffffff;
-    const graphics = this.scene.add.graphics();
-    graphics.setDepth(290);
-    
-    // Draw a small glowing dot at projectile position
-    graphics.fillStyle(color, 0.8);
-    graphics.fillCircle(projectile.x, projectile.y, 4);
-    
-    // Add a subtle glow
-    graphics.fillStyle(color, 0.3);
-    graphics.fillCircle(projectile.x, projectile.y, 7);
-    
-    return graphics;
   }
 
   /* ── Clear all active effects ─────────────────────────────────────── */

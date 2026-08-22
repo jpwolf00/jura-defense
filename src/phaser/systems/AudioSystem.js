@@ -22,7 +22,6 @@ export default class AudioSystem extends Phaser.Plugins.BasePlugin {
     this._muted = false;
     this._throttleMs = 40;
     this._lastPlay = -Infinity;
-    this._unlocked = false; // AudioContext unlocked after first user gesture
   }
 
   /* ── AudioContext bootstrap ─────────────────────────────────────── */
@@ -37,22 +36,9 @@ export default class AudioSystem extends Phaser.Plugins.BasePlugin {
     return this._ctx;
   }
 
-  /** Unlock audio on first user interaction (required by browsers) */
-  unlock() {
-    if (this._unlocked) return;
-    const ctx = this._getContext();
-    if (ctx.state === 'suspended') {
-      ctx.resume().then(() => {
-        this._unlocked = true;
-      });
-    } else {
-      this._unlocked = true;
-    }
-  }
-
   /** Play a synthesized sound by key. */
   play(key, _volume) {
-    if (this._muted || !this._unlocked) return;
+    if (this._muted) return;
     const now = performance.now();
     if (now - this._lastPlay < this._throttleMs) {
       return; // throttle similar sounds

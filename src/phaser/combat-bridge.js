@@ -18,9 +18,6 @@ export default class CombatBridge {
     this._fxThrottle = new Map();
     this._now = timeNow || (() => performance.now());
 
-    // S06: Track projectile graphics for rendering
-    this._projectileGraphics = new Map();
-
     // P3-05: Delegate audio/FX entirely to Phaser scene callbacks.
     // Direct calls here would double-fire alongside the callbacks that
     // the playground scene wires up (towerFireCB, hitCB, etc.).
@@ -49,9 +46,6 @@ export default class CombatBridge {
         this.enemySprites.splice(i, 1);
       }
     }
-
-    // S06: Render projectile trails
-    this._renderProjectiles();
   }
 
   updateProjectiles(dt) {
@@ -64,9 +58,8 @@ export default class CombatBridge {
       const distance = Math.hypot(dx, dy);
       const travel = projectile.speed * dt;
       if (distance <= travel || projectile.life <= 0) {
-        // Fire hit FX with damage for scaling feedback
-        const status = target.slowFactor < 1 ? 'slow' : 'normal';
-        this._emitHit(target.x, target.y, status, projectile.dmg);
+        // Fire hit FX
+        this._emitHit(target.x, target.y, target.slowFactor < 1 ? 'slow' : 'normal');
         // Apply damage
         target.damage(projectile.dmg);
         if (projectile.slow < 1) target.applySlow(projectile.slow, projectile.slowDur);
@@ -77,48 +70,6 @@ export default class CombatBridge {
       projectile.y += (dy / distance) * travel;
       projectile.life -= dt;
     }
-  }
-
-  // S06: Render projectile trails with tower-color coding
-  _renderProjectiles() {
-    if (!this._fxSystem) return;
-
-    // Clean up graphics for projectiles that no longer exist
-    for (const [proj, gfx] of this._projectileGraphics) {
-      if (!this.projectiles.includes(proj)) {
-        gfx.destroy();
-        this._projectileGraphics.delete(proj);
-      }
-    }
-
-    // Render/update graphics for active projectiles
-    for (const projectile of this.projectiles) {
-      let gfx = this._projectileGraphics.get(projectile);
-      if (!gfx) {
-        gfx = this._fxSystem.drawProjectileTrail(projectile, projectile.towerType);
-        this._projectileGraphics.set(projectile, gfx);
-      } else {
-        // Update position
-        gfx.clear();
-        const color = this._getTowerColor(projectile.towerType);
-        gfx.fillStyle(color, 0.8);
-        gfx.fillCircle(projectile.x, projectile.y, 4);
-        gfx.fillStyle(color, 0.3);
-        gfx.fillCircle(projectile.x, projectile.y, 7);
-      }
-    }
-  }
-
-  _getTowerColor(towerType) {
-    // Match FXSystem.TOWER_COLORS for consistency
-    const colors = {
-      tranq: 0x66bb6a,
-      fence: 0xffeb3b,
-      drone: 0x42a5f5,
-      heli: 0xef5350,
-      chrono: 0xab47bc,
-    };
-    return colors[towerType] || 0xffffff;
   }
 
   /* ── FX emission helpers (renderer-neutral via callbacks) ───────── */
@@ -135,14 +86,14 @@ export default class CombatBridge {
   }
 
   /** Called when a projectile hits an enemy. */
-  _emitHit(x, y, status, damage) {
+  _emitHit(x, y, status) {
     const key = `${status}-${Math.floor(x / 10)}-${Math.floor(y / 10)}`;
     if (this._fxThrottle.has(key)) return;
     this._fxThrottle.set(key, this._now());
     this._fxThrottle.forEach((t, k) => { if (this._now() - t > 300) this._fxThrottle.delete(k); });
 
     // P3-05: FX + audio delegated to Phaser scene callbacks (avoid double-fire)
-    this._hitCB?.(x, y, status, damage);
+    this._hitCB?.(x, y, status);
   }
 
   /** Called when an enemy dies. */

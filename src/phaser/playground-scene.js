@@ -11,9 +11,6 @@ import { WaveBridge, installWaveBridgeContract } from './wave-bridge.js';
 import { TOWER_TYPES } from '../js/tower.js';
 import FXSystem, { addFXSystem } from './systems/FXSystem.js';
 import AudioSystem, { addAudioSystem } from './systems/AudioSystem.js';
-import { HUDPanel } from './ui/hud-panel.js';
-import { TowerShelf } from './ui/tower-shelf.js';
-import { WaveCountdown, TowerInspectionPanel } from './ui/overlay-ui.js';
 
 export default class PlaygroundScene extends Phaser.Scene {
   constructor() { super('PlaygroundScene'); }
@@ -79,26 +76,6 @@ export default class PlaygroundScene extends Phaser.Scene {
     this._selectedTowerSprite = null;
     globalThis.__juraSelectedTowerContract = null;
 
-    // ── P3-04: UI/HUD modules ─────────────────────────────────────────
-    this.hudPanel    = new HUDPanel(this);
-    this.towerShelf  = new TowerShelf(this);
-    this.waveCountdown = new WaveCountdown(this);
-    this.inspectionPanel = new TowerInspectionPanel(this);
-
-    // Tower-shelf callback: called when player picks a tower type from shelf
-    this._onTowerTypeSelect = (type) => {
-      const idx = this._towerTypeKeys.indexOf(type);
-      if (idx >= 0) {
-        this._selectedTowerTypeIndex = idx;
-        this._towerTypeText.setText(this._towerTypeLabel());
-        this._pathLayer.setHoverTowerType(type);
-      }
-    };
-
-    // Upgrade / sell callbacks for inspection panel
-    this._onUpgrade = () => this._upgradeSelected();
-    this._onSell    = () => this._sellSelected();
-
     // ── P3-05: Register FX + Audio plugins ────────────────────────────
     this.fxSystem = addFXSystem(this);
     this.audioSystem = addAudioSystem(this);
@@ -106,16 +83,8 @@ export default class PlaygroundScene extends Phaser.Scene {
     globalThis.__juraAudioSystem = this.audioSystem;
     globalThis.__juraAudioSystem.setGlobalMute(false);
 
-    // S06: Unlock audio on first user gesture (browser requirement)
-    this._audioUnlocked = false;
-    this._unlockAudio = () => {
-      if (!this._audioUnlocked) {
-        this.audioSystem?.unlock();
-        this._audioUnlocked = true;
-      }
-    };
-    this.input.once('pointerdown', this._unlockAudio);
-    this.input.keyboard?.once('keydown', this._unlockAudio);
+    // Mute toggle button — press the icon in the action bar
+    this._muted = false;
 
     const demoTower = new Tower('tranq', 180, 250);
     this._demoTowerSprite = new TowerSprite(this, demoTower);
@@ -130,12 +99,8 @@ export default class PlaygroundScene extends Phaser.Scene {
       }
       if (sprite.selected) {
         this._selectedTowerSprite = sprite;
-        // P3-04: Show inspection panel
-        this.inspectionPanel.show(sprite.tower);
       } else {
         this._selectedTowerSprite = null;
-        // P3-04: Hide inspection panel
-        this.inspectionPanel.hide();
       }
       const state = sprite.getTowerState();
       globalThis.__juraSelectedTowerContract = sprite.selected ? state : null;
@@ -149,25 +114,6 @@ export default class PlaygroundScene extends Phaser.Scene {
     this._selectedTowerTypeIndex = 0;
     this._placedTowers = [demoTower]; // all placed towers (including demo)
     this._towerSpriteList = [this._demoTowerSprite];
-
-    // ── P3-04: Build tower shelf and HUD panel ────────────────────────
-    // Shelf must be built after _towerTypeKeys is set
-    this.towerShelf.build(this._towerTypeKeys, {});
-    this.hudPanel.paintBackground(0x17231d, 0.85, 14, 6);
-    this.hudPanel.attachTo(this.hudPanel._group);
-
-    // ── P3-04: Tower shelf event handler (replaces keyboard-only type cycle) ──
-    // Also wire tower shelf selection into the tower sprite selection flow
-    const scene = this;
-    this.towerShelf._slots.forEach((slot) => {
-      slot.bg?.on('pointerdown', () => {
-        if (slot.type) {
-          this._selectedTowerTypeIndex = this._towerTypeKeys.indexOf(slot.type);
-          this._towerTypeText.setText(this._towerTypeLabel());
-          this._pathLayer.setHoverTowerType(slot.type);
-        }
-      });
-    });
 
     // Mark the demo tower's slot as occupied (slot 0 = path.js SLOTS[0])
     // We need to find which slot the demo tower occupies
@@ -257,9 +203,7 @@ export default class PlaygroundScene extends Phaser.Scene {
         this.fxSystem?.muzzleFlash(x, y, type);
       },
       hitCB: (x, y, status) => {
-        // Map renderer-neutral status to AudioSystem sound keys
-        const audioKey = status === 'normal' ? 'combat-hit' : 'combat-' + status;
-        this.audioSystem?.play(audioKey);
+        this.audioSystem?.play('combat-' + status);
         this.fxSystem?.hitFlash(x, y, status);
       },
       killCB: (x, y, species) => {
@@ -307,33 +251,19 @@ export default class PlaygroundScene extends Phaser.Scene {
     installAbilityBridgeContract(this.abilityBridge);
     globalThis.__juraAbilityBridgeInstance = this.abilityBridge;
 
-    // Wire pointer input for meteor targeting.
-    // Guard against the double-fire problem: the Meteor button's own
-    // pointerdown handler calls startMeteorTargeting(), then the scene's
-    // global pointerdown fires for the *same* pointer and sees targeting
-    // === true, calling fireMeteor() immediately.  A per-frame flag
-    // (_skipMeteorPointer) prevents the global handler from firing on the
-    // same frame the button started targeting.
-    //
-    // S02 fix: Convert pointer coords to world coords so the ability-bridge
-    // always receives game coords (0..1280, 0..720) regardless of scale mode.
-    this._skipMeteorPointer = false;
+    // Wire pointer input for meteor targeting
     this.input.on('pointerdown', (pointer) => {
-      if (this._skipMeteorPointer) { this._skipMeteorPointer = false; return; }
       if (this.abilityBridge?.meteorTargeting) {
-        const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-        this.abilityBridge.fireMeteor(worldPoint.x, worldPoint.y);
+        this.abilityBridge.fireMeteor(pointer.x, pointer.y);
       }
     });
     this.input.on('pointermove', (pointer) => {
-      const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-      this.abilityBridge?.updateMeteorReticle(worldPoint.x, worldPoint.y);
+      this.abilityBridge?.updateMeteorReticle(pointer.x, pointer.y);
     });
 
-    // Ability status display — top-left, below wave HUD
-    // Shows only ability-specific info (meteor/chrono) since HUDPanel handles lives/money/wave/speed
-    this.abilityHudText = this.add.text(20, 120 * uiScale, '', {
-      fontSize: `${Math.max(10, 14 * uiScale)}px`,
+    // HUD for wave bridge state — top-left, responsive
+    this.waveHudText = this.add.text(20, 120 * uiScale, '', {
+      fontSize: `${Math.max(10, 16 * uiScale)}px`,
       color: '#ffffff',
       backgroundColor: '#000000aa',
       padding: { x: 8, y: 6 },
@@ -412,15 +342,11 @@ export default class PlaygroundScene extends Phaser.Scene {
     const meteorBtn = makeBtn(meteorX, btnY, btnW, btnH, 0x5a3a2a, 0xe0a458);
     this.meteorBtnText = makeText(meteorX, meteorBtn.y, '☄️ Meteor', 16);
     meteorBtn.on('pointerdown', () => {
-      const ab = this.abilityBridge;
-      if (ab?.meteorTargeting) {
-        ab.cancelMeteorTargeting();
+      if (this.abilityBridge?.meteorTargeting) {
+        this.abilityBridge.cancelMeteorTargeting();
         this.meteorBtnText.setText('☄️ Meteor');
-      } else if (ab?.startMeteorTargeting()) {
+      } else if (this.abilityBridge?.startMeteorTargeting()) {
         this.meteorBtnText.setText('☄️ [AIM]');
-        // Prevent the scene's global pointerdown from firing fireMeteor()
-        // on the same pointer event that started targeting.
-        this._skipMeteorPointer = true;
       }
     });
     meteorBtn.on('pointerover', () => meteorBtn.setFillStyle(0x7a4a3a));
@@ -472,13 +398,6 @@ export default class PlaygroundScene extends Phaser.Scene {
     speedBtn.on('pointerover', () => speedBtn.setFillStyle(0x7a3a7a));
     speedBtn.on('pointerout', () => speedBtn.setFillStyle(0x5a2a5a));
 
-    // Keyboard: M toggles mute (when not in meteor targeting mode)
-    this.input.keyboard.addKey('M').on('down', () => {
-      if (!this.abilityBridge?.meteorTargeting) {
-        this._toggleMute();
-      }
-    });
-
     globalThis.__juraTouchContract = {
       minimumTarget: 48,
       layout: isNarrowLayout ? 'two-row' : 'single-row',
@@ -517,23 +436,12 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.anims.create({ key: 'raptor-walk', frames: this.anims.generateFrameNumbers('raptorWalk', { start: 0, end: 5 }), frameRate: 8, repeat: -1 });
     walker.play('raptor-walk');
 
-    // Debug text gated behind query param ?debug=1
-    const debugMode = new URLSearchParams(globalThis.location.search).get('debug') === '1';
-    if (debugMode) {
-      this.add.text(20, 20, 'Jura Defense Phaser Scale Spike', { fontSize: '28px', color: '#00ff88' });
-      this.pointerText = this.add.text(20, 60, 'Pointer: (0, 0)', { fontSize: '18px', color: '#ffffff' });
-      this.input.on('pointermove', (pointer) => {
-        if (this.pointerText) {
-          this.pointerText.setText(`Pointer: (${Math.round(pointer.x)}, ${Math.round(pointer.y)})`);
-        }
-        globalThis.__juraPhaserPointer = { x: pointer.x, y: pointer.y };
-      });
-    } else {
-      // Still track pointer for contract, just don't render debug text
-      this.input.on('pointermove', (pointer) => {
-        globalThis.__juraPhaserPointer = { x: pointer.x, y: pointer.y };
-      });
-    }
+    this.add.text(20, 20, 'Jura Defense Phaser Scale Spike', { fontSize: '28px', color: '#00ff88' });
+    this.pointerText = this.add.text(20, 60, 'Pointer: (0, 0)', { fontSize: '18px', color: '#ffffff' });
+    this.input.on('pointermove', (pointer) => {
+      this.pointerText.setText(`Pointer: (${Math.round(pointer.x)}, ${Math.round(pointer.y)})`);
+      globalThis.__juraPhaserPointer = { x: pointer.x, y: pointer.y };
+    });
 
     // P3-02: First-run onboarding guidance panel
     this._createOnboardingPanel();
@@ -571,125 +479,155 @@ export default class PlaygroundScene extends Phaser.Scene {
   // ────────────────────────────────────────────────────────────────────────
 
   _createOnboardingPanel() {
-    // Check if onboarding has been shown before (persisted flag)
-    const hasSeenOnboarding = globalThis.localStorage?.getItem('jura-onboarding-seen') === 'true';
-    if (hasSeenOnboarding) {
-      // Skip onboarding — install contract but don't show panel
-      this._onboardingVisible = false;
-      this._onboardingDismissed = true;
-      this._installOnboardingContract();
-      return;
-    }
-
     const uiScale = this._uiScale();
     const isPortrait = this._isPortrait();
     const isNarrow = this._isNarrow();
 
-    // Onboarding overlay: 5 steps teaching build -> start wave -> meteor -> chrono -> upgrade/sell
-    const steps = [
-      { title: '1. Build Towers', body: 'Click empty slots to place towers.\nSelect tower type from the shelf below.' },
-      { title: '2. Start Waves', body: 'Press the Start Waves button\nto begin the assault.' },
-      { title: '3. Meteor Strike', body: 'Click the ☄️ Meteor button,\nthen click to call down a strike.' },
-      { title: '4. Chrono Rewind', body: 'Use ⏳ Chrono to rewind\nthe last 4 seconds.' },
-      { title: '5. Upgrade & Sell', body: 'Click a tower to select it.\nUpgrade (U) or sell (R) as needed.' },
-    ];
+    // On narrow/portrait viewports the panel becomes a compact left-side
+    // overlay positioned below the title/HUD area (y=90) so it does not
+    // overlap the title, pointer text, wave HUD, or tower-type selector.
+    // Uses a 2-column layout to keep vertical extent minimal while
+    // preserving all required action keys.
+    if (isPortrait || isNarrow) {
+      // In portrait the logical Phaser canvas is wider than the viewport and
+      // the route begins across the upper-left area. Keep the guide below the
+      // top HUD/route while leaving the bottom action row usable.
+      const x = 8;
+      const y = 500;
+      const w = Math.min(260, Math.max(220, this.scale.width * 0.65));
+      const h = 150;
 
-    this._onboardingSteps = steps;
-    this._onboardingStepIndex = 0;
+      this._onboardingBg = this.add.rectangle(x + w / 2, y + h / 2, w, h, 0x000000, 0.85)
+        .setStrokeStyle(1, 0xe0a458)
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(100);
 
-    // Full-screen overlay background
-    const overlayW = this.scale.width;
-    const overlayH = this.scale.height;
-    this._onboardingOverlayBg = this.add.rectangle(overlayW / 2, overlayH / 2, overlayW, overlayH, 0x000000, 0.7)
-      .setScrollFactor(0)
-      .setDepth(200);
+      const fsTitle = Math.max(10, 13 * uiScale);
+      const fsBody = Math.max(8, 11 * uiScale);
 
-    // Panel
-    const panelW = isPortrait || isNarrow ? Math.min(320, this.scale.width * 0.85) : 400;
-    const panelH = isPortrait || isNarrow ? 280 : 240;
-    const panelX = overlayW / 2;
-    const panelY = overlayH / 2;
+      this._onboardingTitle = this.add.text(x + 8, y + 6, 'Quick Guide', {
+        fontSize: `${fsTitle}px`,
+        color: '#e0a458',
+        fontStyle: 'bold',
+      }).setScrollFactor(0).setDepth(101);
 
-    this._onboardingPanelBg = this.add.rectangle(panelX, panelY, panelW, panelH, 0x17231d, 0.95)
-      .setStrokeStyle(3, 0x6fe3c1)
-      .setScrollFactor(0)
-      .setDepth(201);
+      // 2-column layout: left column = placement/controls, right = abilities
+      const colW = (w - 20) / 2;
+      const leftLines = [
+        '• Click slot → place',
+        '• T cycle type',
+        '• U upgrade  R sell',
+        '• Start Waves ↓',
+      ];
+      const rightLines = [
+        '• Space pause',
+        '• F speed 1×/2×',
+        '• ☄️ Meteor (M)',
+        '• ⏳ Chrono rewind',
+      ];
 
-    // Title
-    const titleY = panelY - panelH / 2 + 30;
-    this._onboardingTitle = this.add.text(panelX, titleY, steps[0].title, {
-      fontSize: `${Math.max(16, 22 * uiScale)}px`,
-      color: '#e0a458',
-      fontStyle: 'bold',
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(202);
+      this._onboardingBody = this.add.text(x + 8, y + 6 + fsTitle + 4, leftLines.join('\n'), {
+        fontSize: `${fsBody}px`,
+        color: '#ffffff',
+        lineSpacing: 1,
+      }).setScrollFactor(0).setDepth(101);
 
-    // Body text
-    const bodyY = titleY + 40;
-    this._onboardingBody = this.add.text(panelX, bodyY, steps[0].body, {
-      fontSize: `${Math.max(12, 15 * uiScale)}px`,
-      color: '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 2,
-      align: 'center',
-      lineSpacing: 4,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(202);
+      this._onboardingBodyRight = this.add.text(x + 8 + colW + 4, y + 6 + fsTitle + 4, rightLines.join('\n'), {
+        fontSize: `${fsBody}px`,
+        color: '#ffffff',
+        lineSpacing: 1,
+      }).setScrollFactor(0).setDepth(101);
 
-    // Step indicator
-    const stepY = panelY + panelH / 2 - 70;
-    this._onboardingStepIndicator = this.add.text(panelX, stepY, `Step 1 of ${steps.length}`, {
-      fontSize: `${Math.max(10, 12 * uiScale)}px`,
-      color: '#aaaaaa',
-      stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(202);
+      // Tip line below columns
+      this._onboardingTip = this.add.text(x + 8, y + h - 22, 'Tip: hover slot to preview', {
+        fontSize: `${Math.max(7, 10 * uiScale)}px`,
+        color: '#aaaaaa',
+        fontStyle: 'italic',
+      }).setScrollFactor(0).setDepth(101);
 
-    // Next/Skip buttons
-    const btnY = panelY + panelH / 2 - 35;
-    const btnW = Math.max(80, 100 * uiScale);
-    const btnH = Math.max(40, 44 * uiScale);
-    const btnGap = 20;
+      // ── Touch-safe dismiss button ────────────────────────────────────
+      // Minimum 48 px touch target (WCAG 2.5.5).  Ensure the button is
+      // large enough for a finger tap even when the panel is narrow.
+      const dismissW = Math.max(48, 60 * uiScale);
+      const dismissH = Math.max(48, 18 * uiScale);
+      const dismissX = x + w - dismissW - 6;
+      const dismissY = y + 4;
+      const dismissHitArea = new Phaser.Geom.Rectangle(0, 0, dismissW, dismissH);
+      this._onboardingDismissBg = this.add.rectangle(
+        dismissX + dismissW / 2, dismissY + dismissH / 2,
+        dismissW, dismissH, 0x2a5a3a,
+      ).setStrokeStyle(1, 0x6fe3c1).setScrollFactor(0).setDepth(102)
+        .setInteractive(dismissHitArea, Phaser.Geom.Rectangle.Contains, { useHandCursor: true });
+      this._onboardingDismissText = this.add.text(
+        dismissX + dismissW / 2, dismissY + dismissH / 2, '✕', {
+          fontSize: `${Math.max(9, 11 * uiScale)}px`, color: '#ffffff',
+        }
+      ).setOrigin(0.5).setScrollFactor(0).setDepth(103);
 
-    // Next button
-    const nextBtnX = panelX + btnW / 2 + btnGap / 2;
-    this._onboardingNextBg = this.add.rectangle(nextBtnX, btnY, btnW, btnH, 0x2a5a3a)
-      .setStrokeStyle(2, 0x6fe3c1)
-      .setScrollFactor(0)
-      .setDepth(203)
-      .setInteractive(new Phaser.Geom.Rectangle(-btnW / 2, -btnH / 2, btnW, btnH), Phaser.Geom.Rectangle.Contains, { useHandCursor: true });
-    
-    this._onboardingNextText = this.add.text(nextBtnX, btnY, 'Next', {
-      fontSize: `${Math.max(12, 14 * uiScale)}px`,
-      color: '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(204);
+      this._onboardingDismissBg.on('pointerover', () => this._onboardingDismissBg.setFillStyle(0x3a7a4a));
+      this._onboardingDismissBg.on('pointerout', () => this._onboardingDismissBg.setFillStyle(0x2a5a3a));
+      this._onboardingDismissBg.on('pointerdown', () => this._dismissOnboarding('click'));
+    } else {
+      // Desktop: left-column panel
+      const x = 20;
+      const y = 160;
+      const w = 320 * uiScale;
+      const h = 250 * uiScale;
 
-    this._onboardingNextBg.on('pointerover', () => this._onboardingNextBg.setFillStyle(0x3a7a4a));
-    this._onboardingNextBg.on('pointerout', () => this._onboardingNextBg.setFillStyle(0x2a5a3a));
-    this._onboardingNextBg.on('pointerdown', () => this._advanceOnboardingStep());
+      this._onboardingBg = this.add.rectangle(x + w / 2, y + h / 2, w, h, 0x000000, 0.82)
+        .setStrokeStyle(1, 0xe0a458)
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(100);
 
-    // Skip button
-    const skipBtnX = panelX - btnW / 2 - btnGap / 2;
-    this._onboardingSkipBg = this.add.rectangle(skipBtnX, btnY, btnW, btnH, 0x4a4a4a)
-      .setStrokeStyle(2, 0x888888)
-      .setScrollFactor(0)
-      .setDepth(203)
-      .setInteractive(new Phaser.Geom.Rectangle(-btnW / 2, -btnH / 2, btnW, btnH), Phaser.Geom.Rectangle.Contains, { useHandCursor: true });
-    
-    this._onboardingSkipText = this.add.text(skipBtnX, btnY, 'Skip', {
-      fontSize: `${Math.max(12, 14 * uiScale)}px`,
-      color: '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(204);
+      this._onboardingTitle = this.add.text(x + 12, y + 10, 'First Run — Quick Guide', {
+        fontSize: `${Math.max(11, 15 * uiScale)}px`,
+        color: '#e0a458',
+        fontStyle: 'bold',
+      }).setScrollFactor(0).setDepth(101);
 
-    this._onboardingSkipBg.on('pointerover', () => this._onboardingSkipBg.setFillStyle(0x5a5a5a));
-    this._onboardingSkipBg.on('pointerout', () => this._onboardingSkipBg.setFillStyle(0x4a4a4a));
-    this._onboardingSkipBg.on('pointerdown', () => this._dismissOnboarding('skip'));
+      const bodyLines = [
+        '• Click a glowing slot to place the selected tower.',
+        '• T cycle tower type (Tranq / Cannon / Frost / Sniper).',
+        '• U upgrade the selected tower.',
+        '• R sell the selected tower (refund).',
+        '• Start Waves bottom-center button — begins the assault.',
+        '• Pause Space key or the ⏸ button.',
+        '• Speed F toggles 1× / 2×.',
+        '• Meteor ☄️ button (or M) — aim, then click to call down.',
+        '• Chrono ⏳ button — rewind the last 4 seconds.',
+        '',
+        'Tip: hover a free slot to preview range before placing.',
+      ];
+      this._onboardingBody = this.add.text(x + 12, y + 34, bodyLines.join('\n'), {
+        fontSize: `${Math.max(9, 13 * uiScale)}px`,
+        color: '#ffffff',
+        lineSpacing: 2,
+      }).setScrollFactor(0).setDepth(101);
 
-    // Esc also dismisses
+      const dismissW = Math.max(48, 70 * uiScale);
+      const dismissH = Math.max(48, 22 * uiScale);
+      const dismissX = x + w - dismissW - 8;
+      const dismissY = y + 8;
+      const dismissHitArea = new Phaser.Geom.Rectangle(0, 0, dismissW, dismissH);
+      this._onboardingDismissBg = this.add.rectangle(
+        dismissX + dismissW / 2, dismissY + dismissH / 2,
+        dismissW, dismissH, 0x2a5a3a,
+      ).setStrokeStyle(1, 0x6fe3c1).setScrollFactor(0).setDepth(102)
+        .setInteractive(dismissHitArea, Phaser.Geom.Rectangle.Contains, { useHandCursor: true });
+      this._onboardingDismissText = this.add.text(
+        dismissX + dismissW / 2, dismissY + dismissH / 2, 'Got it ✕', {
+          fontSize: `${Math.max(10, 12 * uiScale)}px`, color: '#ffffff',
+        }
+      ).setOrigin(0.5).setScrollFactor(0).setDepth(103);
+
+      this._onboardingDismissBg.on('pointerover', () => this._onboardingDismissBg.setFillStyle(0x3a7a4a));
+      this._onboardingDismissBg.on('pointerout', () => this._onboardingDismissBg.setFillStyle(0x2a5a3a));
+      this._onboardingDismissBg.on('pointerdown', () => this._dismissOnboarding('click'));
+    }
+
+    // Esc also dismisses — only when the panel is visible
     this._onboardingEscHandler = (event) => {
       if (event.key === 'Escape' && this._onboardingVisible) {
         this._dismissOnboarding('esc');
@@ -704,55 +642,15 @@ export default class PlaygroundScene extends Phaser.Scene {
     this._onboardingDismissReason = null;
   }
 
-  _advanceOnboardingStep() {
-    if (!this._onboardingVisible || !this._onboardingSteps) return;
-    
-    this._onboardingStepIndex++;
-    
-    if (this._onboardingStepIndex >= this._onboardingSteps.length) {
-      // Completed all steps
-      this._dismissOnboarding('completed');
-      return;
-    }
-
-    // Update panel content
-    const step = this._onboardingSteps[this._onboardingStepIndex];
-    this._onboardingTitle.setText(step.title);
-    this._onboardingBody.setText(step.body);
-    this._onboardingStepIndicator.setText(`Step ${this._onboardingStepIndex + 1} of ${this._onboardingSteps.length}`);
-
-    // Update button text on last step
-    if (this._onboardingStepIndex === this._onboardingSteps.length - 1) {
-      this._onboardingNextText.setText('Done');
-    }
-  }
-
   _dismissOnboarding(reason) {
     if (!this._onboardingVisible) return;
     this._onboardingVisible = false;
     this._onboardingDismissed = true;
     this._onboardingDismissReason = reason || 'unknown';
 
-    // Persist flag so onboarding only shows once
-    try {
-      globalThis.localStorage?.setItem('jura-onboarding-seen', 'true');
-    } catch (_e) {
-      // localStorage may not be available in some contexts
-    }
-
-    // Destroy overlay elements
-    if (this._onboardingOverlayBg) this._onboardingOverlayBg.destroy();
-    if (this._onboardingPanelBg) this._onboardingPanelBg.destroy();
+    if (this._onboardingBg) this._onboardingBg.destroy();
     if (this._onboardingTitle) this._onboardingTitle.destroy();
     if (this._onboardingBody) this._onboardingBody.destroy();
-    if (this._onboardingStepIndicator) this._onboardingStepIndicator.destroy();
-    if (this._onboardingNextBg) this._onboardingNextBg.destroy();
-    if (this._onboardingNextText) this._onboardingNextText.destroy();
-    if (this._onboardingSkipBg) this._onboardingSkipBg.destroy();
-    if (this._onboardingSkipText) this._onboardingSkipText.destroy();
-
-    // Legacy cleanup for old onboarding panel elements
-    if (this._onboardingBg) this._onboardingBg.destroy();
     if (this._onboardingBodyRight) this._onboardingBodyRight.destroy();
     if (this._onboardingTip) this._onboardingTip.destroy();
     if (this._onboardingDismissBg) this._onboardingDismissBg.destroy();
@@ -807,26 +705,19 @@ export default class PlaygroundScene extends Phaser.Scene {
     if (this.combatBridge) globalThis.__juraCombatState = this.combatBridge.getState();
     this.waveBridge?.update(delta);
     this.abilityBridge?.update(dt * (this.waveBridge?.timeScale || 1));
-    
-    // Update HUDPanel (authoritative for lives/money/wave/speed)
-    this.hudPanel?.update();
-    
-    // Update ability-only HUD (meteor/chrono status)
-    if (this.waveBridge && this.abilityHudText) {
+    if (this.waveBridge && this.waveHudText) {
+      const s = this.waveBridge.state();
       const ab = this.abilityBridge?.state() || { meteor: {}, chrono: {} };
-      this.abilityHudText.setText(
+      this.waveHudText.setText(
+        `Wave: ${s.waveNumber}/${s.totalWaves}  ${s.hint}\n` +
+        `Spawned: ${s.enemiesSpawned}  Alive: ${s.enemiesAlive}\n` +
+        `Phase: ${s.phase}  Speed: ${s.timeScale}×\n` +
+        `Money: ${s.money}  Lives: ${s.lives}\n` +
         `☄️ Meteor: ${ab.meteor.charges}/${ab.meteor.maxCharges}  ` +
         `${ab.meteor.targeting ? '[TARGETING]' : ab.meteor.ready ? 'READY' : 'cooling'}\n` +
         `⏳ Chrono: ${Math.round(ab.chrono.pct * 100)}%  ${ab.chrono.ready ? 'READY' : 'charging'}`
       );
     }
-    
-    // Update tower shelf affordability
-    if (this.waveBridge && this.towerShelf) {
-      const state = this.waveBridge.state();
-      this.towerShelf.update(state);
-    }
-    
     // Refresh placement contract every frame for live inspection
     if (globalThis.__juraPlacementContract) {
       globalThis.__juraPlacementContract.selectedType = this._towerTypeKeys[this._selectedTowerTypeIndex];
@@ -1047,13 +938,6 @@ export default class PlaygroundScene extends Phaser.Scene {
       this._pathLayer.highlightSlot(idx, 0x00ff88, 0.5);
       this.time.delayedCall(300, () => this._pathLayer.resetSlotHighlight(idx));
     }
-  }
-
-  /** Toggle audio mute/unmute. */
-  _toggleMute() {
-    this._muted = !this._muted;
-    this.audioSystem?.setGlobalMute(this._muted);
-    this._muteBtn?.setText(this._muted ? '🔇' : '🔊');
   }
 
   // ---- End P2-05 ----

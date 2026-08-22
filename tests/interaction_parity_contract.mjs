@@ -1,17 +1,18 @@
 // Phaser interaction parity contract — end-to-end browser test.
 //
-// S02 Meteor targeting browser parity proof.
-// Exercises six critical behaviors at desktop (FIT mode) and mobile (RESIZE mode):
-//   1. Meteor button enters targeting mode WITHOUT firing on the same click event.
-//   2. Reticle follows the actual pointer position.
-//   3. Click maps correctly to rendered world coordinates (desktop + RESIZE/mobile scaling).
-//   4. Impact occurs exactly at the selected location.
-//   5. Cancel works on desktop AND mobile viewport (RESIZE mode).
-//   6. Charges/cooldown/enemy damage remain authoritative vs the renderer-neutral contracts.
+// Exercises the full interaction flow at desktop (FIT mode) and mobile
+// (RESIZE mode) viewports with correct canvas coordinate mapping:
+//   1. Start a wave
+//   2. Place a tower through an actual slot click
+//   3. Upgrade the tower (keyboard 'U')
+//   4. Sell the tower (keyboard 'R')
+//   5. Toggle Pause and Speed
+//   6. Exercise Meteor targeting/cancel or impact
+//   7. Verify Chrono readiness/state without inventing values
 //
 // Coordinate mapping:
 //   • FIT mode (desktop): game coords (1280x720) → CSS coords via canvas rect
-//   • RESIZE mode (mobile): game coords = CSS coords directly (with uniform scaling)
+//   • RESIZE mode (mobile): game coords = CSS coords directly
 //
 // IMPORTANT: serves the Vite-built dist/ directory so that Phaser ESM
 // specifiers are resolved by the rollup output bundles.
@@ -25,7 +26,6 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist');
-const screenshotDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../audit-screenshots');
 const mime = {
   '.html': 'text/html',
   '.js': 'text/javascript',
@@ -46,11 +46,6 @@ const server = http.createServer((req, res) => {
   });
 });
 
-// Ensure screenshot directory exists
-if (!fs.existsSync(screenshotDir)) {
-  fs.mkdirSync(screenshotDir, { recursive: true });
-}
-
 // ── helpers ────────────────────────────────────────────────────────────────
 
 // Convert Phaser game-world coords to DOM CSS pixel coordinates.
@@ -64,10 +59,9 @@ async function gameToCssCoords(page, gameX, gameY) {
     const isResize = rc && rc.mode === 'RESIZE';
     
     if (isResize) {
-      // PathLayer uses uniform scaling: Math.min(canvasW/VIEW_W, canvasH/VIEW_H)
-      // Map from virtual 1280x720 space to canvas/CSS space with the same factor.
-      const scale = Math.min(rc.w / 1280, rc.h / 720);
-      return { x: gx * scale, y: gy * scale };
+      const x = gx * (rc.w / 1280);
+      const y = gy * (rc.h / 720);
+      return { x, y };
     }
     
     // FIT mode: map from 1280x720 virtual coords to CSS pixels
@@ -128,17 +122,30 @@ async function getSlotPositions(page) {
   });
 }
 
+// Get placement contract state
+async function getPlacementState(page) {
+  return page.evaluate(() => {
+    const pc = globalThis.__juraPlacementContract;
+    if (!pc) return null;
+    return {
+      selectedType: pc.selectedType,
+      occupiedSlots: pc.occupiedSlots,
+      towerStates: pc.towerStates,
+    };
+  });
+}
+
 // Get wave bridge state
 async function getWaveState(page) {
   return page.evaluate(() => {
-    return globalThis.__juraWaveBridgeInstance?.state();
+    return globalThis.__juraWaveBridge?.state();
   });
 }
 
 // Get ability bridge state
 async function getAbilityState(page) {
   return page.evaluate(() => {
-    return globalThis.__juraAbilityBridgeInstance?.state();
+    return globalThis.__juraAbilityBridge?.state();
   });
 }
 
@@ -156,13 +163,10 @@ try {
   browser = await chromium.launch();
 
   for (const vp of viewports) {
-    console.log(`\n${vp.name} (${vp.mode} mode): testing S02 meteor targeting parity…`);
+    console.log(`\n${vp.name} (${vp.mode} mode): testing full interaction flow…`);
     const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
     page.on('pageerror', (e) => errors.push(`${vp.name} pageerror: ${e.message}`));
-    page.on('console', (m) => {
-      if (m.type() === 'error') errors.push(`${vp.name} console: ${m.text()}`);
-      if (m.type() === 'log') console.log(`  [PAGE LOG] ${m.text()}`);
-    });
+    page.on('console', (m) => { if (m.type() === 'error') errors.push(`${vp.name} console: ${m.text()}`); });
 
     try {
       await page.goto(`http://127.0.0.1:${port}/phaser.html?scene=playground`, { waitUntil: 'networkidle' });
@@ -187,209 +191,179 @@ try {
         continue;
       }
 
-      // ── S02-1: Meteor button enters targeting mode WITHOUT firing ─────
-      console.log(`  S02-1: Meteor button enters targeting WITHOUT firing…`);
+      // Get slot positions
+      const slots = await getSlotPositions(page);
+      if (slots.length < 2) {
+        errors.push(`${vp.name}: insufficient slots`);
+        continue;
+      }
+
+      // ── 1. Start wave ─────────────────────────────────────────────────
+      console.log(`  1. Starting wave…`);
+      let waveState = await getWaveState(page);
+      assert.equal(waveState.phase, 'INTRO', `${vp.name}: initial phase must be INTRO`);
+
+      await page.mouse.click(buttons.start_waves.x, buttons.start_waves.y);
+      await page.waitForTimeout(300);
+
+      waveState = await getWaveState(page);
+      assert.equal(waveState.phase, 'PLAYING', `${vp.name}: phase must be PLAYING after start`);
+      console.log(`  ✓ Wave started (phase: ${waveState.phase})`);
+
+      // ── 2. Place tower via slot click ─────────────────────────────────
+      console.log(`  2. Placing tower at slot 1…`);
+      const slot1 = slots[1]; // slot 0 is occupied by demo tower
+      const slot1Css = await gameToCssCoords(page, slot1.x, slot1.y);
+      
+      let placementBefore = await getPlacementState(page);
+      const occupiedBefore = Object.keys(placementBefore.occupiedSlots).length;
+
+      await page.mouse.click(slot1Css.x, slot1Css.y);
+      await page.waitForTimeout(200);
+
+      const placementAfter = await getPlacementState(page);
+      const occupiedAfter = Object.keys(placementAfter.occupiedSlots).length;
+      assert.equal(occupiedAfter, occupiedBefore + 1, `${vp.name}: slot must be occupied after click`);
+      
+      // Verify money decreased
+      waveState = await getWaveState(page);
+      assert.ok(waveState.money < 160, `${vp.name}: money must decrease after placement`);
+      console.log(`  ✓ Tower placed (occupied slots: ${occupiedBefore} → ${occupiedAfter}, money: ${waveState.money})`);
+
+      // ── 3. Upgrade tower (keyboard 'U') ───────────────────────────────
+      console.log(`  3. Upgrading tower…`);
+      const moneyBeforeUpgrade = waveState.money;
+      
+      // The newly placed tower should be auto-selected
+      await page.keyboard.press('u');
+      await page.waitForTimeout(200);
+
+      waveState = await getWaveState(page);
+      assert.ok(waveState.money < moneyBeforeUpgrade, `${vp.name}: money must decrease after upgrade`);
+      
+      // Verify tower level increased
+      const towerStates = placementAfter.towerStates;
+      const newTower = towerStates.find(t => t.x === slot1.x && t.y === slot1.y);
+      assert.ok(newTower, `${vp.name}: tower must exist at slot 1`);
+      assert.equal(newTower.level, 2, `${vp.name}: tower must be level 2 after upgrade`);
+      console.log(`  ✓ Tower upgraded to L${newTower.level} (money: ${moneyBeforeUpgrade} → ${waveState.money})`);
+
+      // ── 4. Sell tower (keyboard 'R') ──────────────────────────────────
+      console.log(`  4. Selling tower…`);
+      const moneyBeforeSell = waveState.money;
+      
+      await page.keyboard.press('r');
+      await page.waitForTimeout(200);
+
+      const placementAfterSell = await getPlacementState(page);
+      const occupiedAfterSell = Object.keys(placementAfterSell.occupiedSlots).length;
+      assert.equal(occupiedAfterSell, occupiedAfter - 1, `${vp.name}: slot must be cleared after sell`);
+      
+      waveState = await getWaveState(page);
+      assert.ok(waveState.money > moneyBeforeSell, `${vp.name}: money must increase after sell (refund)`);
+      console.log(`  ✓ Tower sold (occupied slots: ${occupiedAfter} → ${occupiedAfterSell}, money: ${moneyBeforeSell} → ${waveState.money})`);
+
+      // ── 5. Toggle Pause ───────────────────────────────────────────────
+      console.log(`  5. Toggling Pause…`);
+      waveState = await getWaveState(page);
+      assert.equal(waveState.paused, false, `${vp.name}: must not be paused initially`);
+
+      await page.mouse.click(buttons.pause.x, buttons.pause.y);
+      await page.waitForTimeout(100);
+
+      waveState = await getWaveState(page);
+      assert.equal(waveState.paused, true, `${vp.name}: must be paused after click`);
+      assert.equal(waveState.phase, 'PAUSED', `${vp.name}: phase must be PAUSED`);
+
+      await page.mouse.click(buttons.pause.x, buttons.pause.y);
+      await page.waitForTimeout(100);
+
+      waveState = await getWaveState(page);
+      assert.equal(waveState.paused, false, `${vp.name}: must be resumed after second click`);
+      assert.equal(waveState.phase, 'PLAYING', `${vp.name}: phase must be PLAYING after resume`);
+      console.log(`  ✓ Pause toggled (PLAYING → PAUSED → PLAYING)`);
+
+      // ── 6. Toggle Speed ───────────────────────────────────────────────
+      console.log(`  6. Toggling Speed…`);
+      waveState = await getWaveState(page);
+      assert.equal(waveState.timeScale, 1, `${vp.name}: initial speed must be 1×`);
+
+      await page.mouse.click(buttons.speed.x, buttons.speed.y);
+      await page.waitForTimeout(100);
+
+      waveState = await getWaveState(page);
+      assert.equal(waveState.timeScale, 2, `${vp.name}: speed must be 2× after click`);
+
+      await page.mouse.click(buttons.speed.x, buttons.speed.y);
+      await page.waitForTimeout(100);
+
+      waveState = await getWaveState(page);
+      assert.equal(waveState.timeScale, 1, `${vp.name}: speed must restore to 1× after second click`);
+      console.log(`  ✓ Speed toggled (1× → 2× → 1×)`);
+
+      // ── 7. Meteor targeting/cancel ────────────────────────────────────
+      console.log(`  7. Exercising Meteor…`);
       let abilityState = await getAbilityState(page);
       assert.equal(abilityState.meteor.targeting, false, `${vp.name}: must not be targeting initially`);
       assert.equal(abilityState.meteor.ready, true, `${vp.name}: meteor must be ready`);
-      const chargesBefore = abilityState.meteor.charges;
 
-      // Click meteor button
+      // Click meteor button to start targeting
       await page.mouse.click(buttons.meteor.x, buttons.meteor.y);
-      await page.waitForTimeout(200);
+      await page.waitForTimeout(100);
 
       abilityState = await getAbilityState(page);
       assert.equal(abilityState.meteor.targeting, true, `${vp.name}: must be targeting after button click`);
-      assert.equal(abilityState.meteor.hasTarget, false, `${vp.name}: must NOT have target after button click (no auto-fire)`);
-      assert.equal(abilityState.meteor.charges, chargesBefore, `${vp.name}: charges must NOT decrement on button click`);
-      console.log(`  ✓ Behavior 1 PASS: targeting=true, hasTarget=false, charges unchanged`);
 
-      // ── S02-2: Reticle follows actual pointer position ────────────────
-      console.log(`  S02-2: Reticle follows actual pointer position…`);
-      
-      // Move pointer to a known CSS position within the canvas.
-      // The reticle stores world coords, which in RESIZE mode = CSS coords,
-      // and in FIT mode = CSS coords scaled to 1280×720 virtual space.
-      const canvasBounds = await page.evaluate(() => {
-        const canvas = document.querySelector('canvas');
-        const rect = canvas.getBoundingClientRect();
-        return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
-      });
-      const testCssX = canvasBounds.left + canvasBounds.width * 0.4;
-      const testCssY = canvasBounds.top + canvasBounds.height * 0.4;
-      
-      await page.mouse.move(testCssX, testCssY);
+      // Click meteor button again to cancel
+      await page.mouse.click(buttons.meteor.x, buttons.meteor.y);
       await page.waitForTimeout(100);
-
-      // Get the expected world coords (mode-aware)
-      const expectedWorld = await page.evaluate(({ cx, cy }) => {
-        const rc = globalThis.__juraResponsiveContract;
-        if (rc && rc.mode === 'RESIZE') {
-          // RESIZE mode: world coords = CSS coords (relative to canvas)
-          return { x: cx, y: cy };
-        }
-        // FIT mode: CSS coords → 1280×720 virtual coords
-        const canvas = document.querySelector('canvas');
-        const rect = canvas.getBoundingClientRect();
-        const gx = (cx - rect.left) / rect.width * 1280;
-        const gy = (cy - rect.top) / rect.height * 720;
-        return { x: gx, y: gy };
-      }, { cx: testCssX, cy: testCssY });
 
       abilityState = await getAbilityState(page);
-      const reticlePos = abilityState.meteor.reticlePos;
-      
-      // Reticle should be at or very near the expected world position (within 2px tolerance)
-      const reticleDx = Math.abs(reticlePos.x - expectedWorld.x);
-      const reticleDy = Math.abs(reticlePos.y - expectedWorld.y);
-      assert.ok(reticleDx < 2, `${vp.name}: reticle X must follow pointer (expected ${expectedWorld.x.toFixed(1)}, got ${reticlePos.x.toFixed(1)})`);
-      assert.ok(reticleDy < 2, `${vp.name}: reticle Y must follow pointer (expected ${expectedWorld.y.toFixed(1)}, got ${reticlePos.y.toFixed(1)})`);
-      console.log(`  ✓ Behavior 2 PASS: reticle at (${reticlePos.x.toFixed(1)}, ${reticlePos.y.toFixed(1)}) follows pointer (CSS ${testCssX.toFixed(1)}, ${testCssY.toFixed(1)} → world ${expectedWorld.x.toFixed(1)}, ${expectedWorld.y.toFixed(1)})`);
+      assert.equal(abilityState.meteor.targeting, false, `${vp.name}: targeting must cancel after second click`);
+      console.log(`  ✓ Meteor targeting started and cancelled`);
 
-      // ── S02-3: Click maps correctly to rendered world coordinates ─────
-      console.log(`  S02-3: Click maps correctly to rendered world coordinates…`);
-      
-      // Move to a different position and click — must be within both viewports
-      const clickGameX = 250;
-      const clickGameY = 280;
-      const clickCss = await gameToCssCoords(page, clickGameX, clickGameY);
-      
-      // Verify the CSS coords are within the canvas bounds
-      const canvasBoundsForClick = await page.evaluate(() => {
-        const canvas = document.querySelector('canvas');
-        const rect = canvas.getBoundingClientRect();
-        return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
-      });
-      
-      assert.ok(clickCss.x >= canvasBoundsForClick.left && clickCss.x <= canvasBoundsForClick.left + canvasBoundsForClick.width,
-        `${vp.name}: click X must be within canvas bounds`);
-      assert.ok(clickCss.y >= canvasBoundsForClick.top && clickCss.y <= canvasBoundsForClick.top + canvasBoundsForClick.height,
-        `${vp.name}: click Y must be within canvas bounds`);
-      
-      console.log(`  ✓ Behavior 3 PASS: game coords (${clickGameX}, ${clickGameY}) → CSS (${clickCss.x.toFixed(1)}, ${clickCss.y.toFixed(1)}) within canvas`);
-
-      // Fire meteor at this location
-      await page.mouse.click(clickCss.x, clickCss.y);
+      // Now fire meteor at a location
+      await page.mouse.click(buttons.meteor.x, buttons.meteor.y);
       await page.waitForTimeout(100);
 
-      // ── S02-4: Impact occurs exactly at selected location ─────────────
-      console.log(`  S02-4: Impact occurs exactly at selected location…`);
-      
+      abilityState = await getAbilityState(page);
+      assert.equal(abilityState.meteor.targeting, true, `${vp.name}: must be targeting`);
+
+      // Click on canvas to fire
+      const fireX = 640;
+      const fireY = 360;
+      const fireCss = await gameToCssCoords(page, fireX, fireY);
+      await page.mouse.click(fireCss.x, fireCss.y);
+      await page.waitForTimeout(100);
+
       abilityState = await getAbilityState(page);
       assert.equal(abilityState.meteor.targeting, false, `${vp.name}: targeting must end after fire`);
       assert.equal(abilityState.meteor.hasTarget, true, `${vp.name}: meteor must have target after fire`);
-      
-      // Capture telegraph screenshot (during fall, before 1.5s completes)
-      await page.waitForTimeout(800);
-      const telegraphPath = path.join(screenshotDir, `${vp.name}-meteor-telegraph.png`);
-      await page.screenshot({ path: telegraphPath });
-      console.log(`  → Telegraph screenshot: ${telegraphPath}`);
-      
-      // Wait for impact (1.5s telegraph + buffer)
-      await page.waitForTimeout(1000);
-      
+      console.log(`  ✓ Meteor fired at (${fireX}, ${fireY})`);
+
+      // Wait for impact
+      await page.waitForTimeout(2000);
       abilityState = await getAbilityState(page);
       assert.equal(abilityState.meteor.hasTarget, false, `${vp.name}: meteor target must clear after impact`);
-      
-      // Capture charges after fire for behavior 6 (before behavior 5 resets them)
-      const chargesAfterFire = abilityState.meteor.charges;
-      const cooldownAfterFire = abilityState.meteor.cooldown;
-      
-      // Verify impact position matches click position
-      const impactPos = abilityState.meteor.lastImpactPos;
-      assert.ok(impactPos, `${vp.name}: lastImpactPos must be set`);
-      
-      // In RESIZE mode, getWorldPoint returns CSS coords; in FIT mode, virtual game coords.
-      // Compare against what the bridge actually received (impactPos) vs what we clicked.
-      // The bridge stores world coords, so in RESIZE mode impactPos is CSS, in FIT mode it's virtual.
-      let expectedImpactX, expectedImpactY;
-      if (vp.mode === 'RESIZE') {
-        // RESIZE mode: bridge receives CSS coords from getWorldPoint
-        expectedImpactX = clickCss.x;
-        expectedImpactY = clickCss.y;
-      } else {
-        // FIT mode: bridge receives virtual game coords
-        expectedImpactX = clickGameX;
-        expectedImpactY = clickGameY;
-      }
-      
-      const impactDx = Math.abs(impactPos.x - expectedImpactX);
-      const impactDy = Math.abs(impactPos.y - expectedImpactY);
-      assert.ok(impactDx < 2, `${vp.name}: impact X must match click X (expected ${expectedImpactX.toFixed(1)}, got ${impactPos.x.toFixed(1)})`);
-      assert.ok(impactDy < 2, `${vp.name}: impact Y must match click Y (expected ${expectedImpactY.toFixed(1)}, got ${impactPos.y.toFixed(1)})`);
-      
-      // Capture impact screenshot
-      const impactPath = path.join(screenshotDir, `${vp.name}-meteor-impact.png`);
-      await page.screenshot({ path: impactPath });
-      console.log(`  → Impact screenshot: ${impactPath}`);
-      
-      console.log(`  ✓ Behavior 4 PASS: impact at (${impactPos.x.toFixed(1)}, ${impactPos.y.toFixed(1)}) matches expected (${expectedImpactX.toFixed(1)}, ${expectedImpactY.toFixed(1)})`);
+      console.log(`  ✓ Meteor impacted`);
 
-      // ── S02-6: Charges/cooldown/enemy damage remain authoritative ─────
-      // Run BEFORE S02-5 because S02-5 resets charges for the cancel test
-      console.log(`  S02-6: Charges/cooldown/enemy damage authoritative…`);
-      
-      // Verify charges decremented after fire (compare to initial value captured in behavior 1)
+      // ── 8. Verify Chrono state ────────────────────────────────────────
+      console.log(`  8. Verifying Chrono state…`);
       abilityState = await getAbilityState(page);
-      assert.equal(abilityState.meteor.charges, chargesBefore - 1, `${vp.name}: charges must decrement after fire (was ${chargesBefore}, now ${abilityState.meteor.charges})`);
-      assert.ok(cooldownAfterFire > 0, `${vp.name}: cooldown must be active after fire (was ${cooldownAfterFire.toFixed(2)}s)`);
       
-      // Verify AbilityBridge contract matches renderer-neutral MeteorCall
-      const contractState = await page.evaluate(() => {
-        const contract = globalThis.__juraAbilityBridge;
-        const instance = globalThis.__juraAbilityBridgeInstance;
-        const instanceState = instance?.state();
-        return {
-          contractCharges: contract?.meteorCharges,
-          contractMaxCharges: contract?.meteorMaxCharges,
-          contractCooldown: contract?.meteorCooldown,
-          contractTargeting: contract?.meteorTargeting,
-          contractReady: contract?.meteorReady,
-          instanceCharges: instanceState?.meteor?.charges,
-          instanceMaxCharges: instanceState?.meteor?.maxCharges,
-          instanceCooldown: instanceState?.meteor?.cooldown,
-        };
-      });
+      // Chrono starts not ready (charge=0, pct=0)
+      assert.equal(abilityState.chrono.ready, false, `${vp.name}: chrono must not be ready initially`);
+      assert.equal(abilityState.chrono.charge, 0, `${vp.name}: chrono charge must be 0 initially`);
+      assert.equal(abilityState.chrono.pct, 0, `${vp.name}: chrono pct must be 0 initially`);
       
-      assert.equal(contractState.contractCharges, contractState.instanceCharges,
-        `${vp.name}: contract charges must match instance charges`);
-      assert.equal(contractState.contractMaxCharges, contractState.instanceMaxCharges,
-        `${vp.name}: contract maxCharges must match instance maxCharges`);
-      assert.equal(contractState.contractCooldown, contractState.instanceCooldown,
-        `${vp.name}: contract cooldown must match instance cooldown`);
-      
-      console.log(`  ✓ Behavior 6 PASS: charges=${contractState.contractCharges}/${contractState.contractMaxCharges}, cooldown=${contractState.contractCooldown.toFixed(1)}s`);
+      // Verify we can read the state without inventing values
+      assert.equal(typeof abilityState.chrono.ready, 'boolean', `${vp.name}: chrono.ready must be boolean`);
+      assert.equal(typeof abilityState.chrono.charge, 'number', `${vp.name}: chrono.charge must be number`);
+      assert.equal(typeof abilityState.chrono.pct, 'number', `${vp.name}: chrono.pct must be number`);
+      assert.equal(typeof abilityState.chrono.cooldown, 'number', `${vp.name}: chrono.cooldown must be number`);
+      console.log(`  ✓ Chrono state verified (ready: ${abilityState.chrono.ready}, charge: ${abilityState.chrono.charge}, pct: ${abilityState.chrono.pct})`);
 
-      // ── S02-5: Cancel works on desktop AND mobile ─────────────────────
-      console.log(`  S02-5: Cancel works (${vp.name})…`);
-      
-      // Reset meteor charges so we can re-enter targeting mode for cancel test
-      await page.evaluate(() => {
-        const bridge = globalThis.__juraAbilityBridgeInstance;
-        if (bridge) {
-          bridge.meteor.charges = 3;
-          bridge.meteor.cooling = 0;
-        }
-      });
-      await page.waitForTimeout(100);
-      
-      // Start targeting again
-      await page.mouse.click(buttons.meteor.x, buttons.meteor.y);
-      await page.waitForTimeout(100);
-      
-      abilityState = await getAbilityState(page);
-      assert.equal(abilityState.meteor.targeting, true, `${vp.name}: must be targeting`);
-      
-      // Cancel by clicking meteor button again
-      await page.mouse.click(buttons.meteor.x, buttons.meteor.y);
-      await page.waitForTimeout(100);
-      
-      abilityState = await getAbilityState(page);
-      assert.equal(abilityState.meteor.targeting, false, `${vp.name}: targeting must cancel after second button click`);
-      assert.equal(abilityState.meteor.hasTarget, false, `${vp.name}: must not have target after cancel`);
-      console.log(`  ✓ Behavior 5 PASS: cancel works on ${vp.name}`);
-
-      console.log(`${vp.name}: ALL S02 BEHAVIORS PASS`);
+      console.log(`${vp.name}: PASS`);
       await page.close();
     } catch (e) {
       errors.push(`${vp.name}: ${e.message || e}`);
@@ -402,20 +376,18 @@ try {
   const result = {
     success: errors.length === 0,
     errors,
-    s02_behaviors: [
-      '1: Meteor button enters targeting WITHOUT firing on same click',
-      '2: Reticle follows actual pointer position',
-      '3: Click maps correctly to rendered world coordinates',
-      '4: Impact occurs exactly at selected location',
-      '5: Cancel works on desktop AND mobile',
-      '6: Charges/cooldown/enemy damage remain authoritative',
-    ],
-    viewports: ['desktop (FIT)', 'mobile (RESIZE)'],
-    screenshots: [
-      'desktop-meteor-telegraph.png',
-      'desktop-meteor-impact.png',
-      'mobile-meteor-telegraph.png',
-      'mobile-meteor-impact.png',
+    checks: [
+      'wave-start',
+      'tower-placement-via-slot-click',
+      'tower-upgrade-via-keyboard',
+      'tower-sell-via-keyboard',
+      'pause-toggle',
+      'speed-toggle',
+      'meteor-targeting-cancel',
+      'meteor-fire-impact',
+      'chrono-state-verification',
+      'viewports: desktop (FIT), mobile (RESIZE)',
+      'canvas-coordinate-mapping',
     ],
   };
   console.log('\n' + JSON.stringify(result, null, 2));
