@@ -1,0 +1,19 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite src",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "node --check src/js/main.js",
+    "test": "node test/author-maps.test.js"
+  },
+  "dependencies": {
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "canvas": "^3.2.3",
+    "jsdom": "^30.0.1",
+    "vite": "^7.0.0"
+  }
+}

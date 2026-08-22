@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦖</text></svg>" />
+<title>Jura Defense</title>
+<style>
+  :root {
+    --bg: #0d1410;
+    --panel: #16211b;
+    --panel-2: #1e2c23;
+    --line: #2c3f33;
+    --text: #e8e4d8;
+    --muted: #8fa093;
+    --accent: #e0a458;
+    --danger: #d0563f;
+    --good: #6fbf73;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; height: 100dvh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+  }
+  #app { display: flex; flex-direction: column; height: 100%; height: 100dvh; }
+  #stats { display: flex; align-items: baseline; gap: 18px; min-width: 0; }
+  #topbar {
+    display: flex; align-items: center; gap: 18px;
+    padding: 10px 18px;
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-left: max(18px, env(safe-area-inset-left));
+    padding-right: max(18px, env(safe-area-inset-right));
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  #topbar h1 {
+    font-size: 15px; margin: 0; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--accent);
+  }
+  .stat {
+    display: flex; align-items: baseline; gap: 6px;
+    font-size: 13px; color: var(--muted);
+  }
+  .stat b { color: var(--text); font-size: 16px; font-variant-numeric: tabular-nums; }
+  .stat.danger b { color: var(--danger); }
+  #hud-actions { margin-left: auto; display: flex; gap: 8px; }
+  button {
+    font: inherit; font-size: 13px;
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 14px; cursor: pointer;
+    transition: background .12s, transform .05s;
+  }
+  button:hover { background: #26362c; }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  #meteorBtn { border-color: #7a4b2b; color: #f0c089; }
+  #meteorBtn.ready { border-color: #b57a3a; }
+  #meteorBtn.targeting {
+    box-shadow: 0 0 0 2px var(--accent), 0 0 16px rgba(224,164,88,.7);
+    color: #fff; border-color: var(--accent);
+    animation: meteorPulse 1s ease-in-out infinite;
+  }
+  @keyframes meteorPulse {
+    0%, 100% { box-shadow: 0 0 0 2px var(--accent), 0 0 16px rgba(224,164,88,.7); }
+    50% { box-shadow: 0 0 0 2px var(--accent), 0 0 28px rgba(224,164,88,1); }
+  }
+  /* Chrono Charge meter */
+  #chronoWrap { display: flex; flex-direction: column; gap: 3px; width: 130px; }
+  #chronoLabel { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #66e0ff; }
+  #chronoMeterTrack {
+    height: 8px; background: #0a1a1e; border: 1px solid #17353a; border-radius: 6px; overflow: hidden;
+  }
+  #uiChrono {
+    height: 100%; width: 0%; border-radius: 6px;
+    background: linear-gradient(90deg, #2b8ea8, #66e0ff);
+    transition: width .2s ease;
+    box-shadow: 0 0 8px rgba(102,224,255,.6);
+  }
+  #chronoBtn { font-size: 12px; padding: 5px 10px; border-color: #17353a; color: #9fdcff; }
+  #chronoBtn.ready { box-shadow: 0 0 0 1px #66e0ff, 0 0 12px rgba(102,224,255,.55); color: #fff; }
+  #stage {
+    flex: 1; display: grid; grid-template-columns: 1fr 300px;
+    min-height: 0;
+  }
+  #canvasWrap { position: relative; min-width: 0; min-height: 0; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #sidebar {
+    background: var(--panel);
+    border-left: 1px solid var(--line);
+    padding: 10px;
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: 8px;
+    overflow-y: auto;
+  }
+  #sidebar h2 {
+    font-size: 12px; margin: 0; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  #towerShop { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .shopCard {
+    background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px; cursor: pointer; user-select: none;
+    display: flex; flex-direction: column; gap: 3px;
+    transition: border-color .12s;
+  }
+  .shopCard:hover { border-color: var(--accent); }
+  .shopCard.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .shopCard.cantAfford { opacity: .45; }
+  .shopCard .name { font-size: 13px; font-weight: 600; }
+  .shopCard .cost { font-size: 12px; color: var(--accent); }
+  .shopCard .desc { font-size: 11px; color: var(--muted); line-height: 1.3; }
+  #info {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px; font-size: 12px; color: var(--muted); line-height: 1.4;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  #info b { color: var(--text); }
+  #info .head {
+    font-size: 13px; font-weight: 700; color: var(--text);
+    letter-spacing: .02em; margin-bottom: 2px;
+  }
+  #info .desc {
+    font-size: 11px; color: var(--muted); line-height: 1.35;
+  }
+  #info .row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 12px; color: var(--muted);
+  }
+  #info .row b { color: var(--text); font-variant-numeric: tabular-nums; }
+  #info .actions {
+    display: flex; gap: 8px; margin-top: 4px;
+  }
+  #info .actions button {
+    flex: 1; padding: 6px 8px; font-size: 12px;
+    border-radius: 6px;
+  }
+  #info .actions .sell {
+    border-color: #5a3a30; color: #e0a090;
+  }
+  #info .actions .sell:hover { background: #3a2a24; }
+  #info .actions .upgrade {
+    border-color: var(--accent); color: var(--accent); font-weight: 600;
+  }
+  #info .actions .upgrade:hover { background: #2b3d30; }
+  #waveBanner {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    pointer-events: none; opacity: 0; transition: opacity .3s;
+  }
+  #waveBanner.show { opacity: 1; }
+  #waveBanner span {
+    font-size: 40px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--accent); text-shadow: 0 0 24px rgba(224,164,88,.6);
+  }
+  #overlay {
+    position: absolute; inset: 0; display: none; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px;
+    background: rgba(6,10,8,.86); backdrop-filter: blur(4px);
+    padding: 30px; text-align: center;
+  }
+  #overlay.show { display: flex; }
+  #overlay h2 { font-size: 38px; margin: 0; letter-spacing: .08em; color: var(--accent); }
+  #overlay h3 { font-size: 20px; margin: 0; color: var(--text); letter-spacing: .04em; }
+  #overlay p { color: var(--muted); font-size: 15px; max-width: 620px; line-height: 1.6; margin: 0; }
+  #overlay .big { font-size: 52px; }
+  .howto {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    max-width: 720px; width: 100%; margin-top: 4px;
+  }
+  .howto div {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 12px; font-size: 12.5px; color: var(--muted); line-height: 1.5;
+  }
+  .howto b { color: var(--text); font-size: 13.5px; display: block; margin-bottom: 4px; }
+  .howto .ico { font-size: 22px; display: block; margin-bottom: 6px; }
+  #overlay .btn-row { display: flex; gap: 10px; margin-top: 4px; }
+  #overlay button { font-size: 15px; padding: 12px 22px; }
+  #overlay button.primary { background: #2b3d30; border-color: var(--accent); color: var(--accent); font-weight: 700; }
+  #pauseBadge {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    background: rgba(6,10,8,.7); border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px 18px; font-size: 14px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); display: none;
+  }
+  #pauseBadge.show { display: block; }
+  .key { display: inline-block; background: var(--panel-2); border: 1px solid var(--line);
+         border-radius: 5px; padding: 1px 6px; font-family: monospace; color: var(--text); }
+  .shopCard .icon {
+    width: 32px; height: 32px; object-fit: contain; display: block;
+    margin: 0 auto 2px; pointer-events: none;
+  }
+  .shopCard.selected .icon { filter: brightness(1.3) drop-shadow(0 0 4px rgba(224,164,88,.6)); }
+  /* ---------------------------------------------------------------- mobile */
+  * { -webkit-tap-highlight-color: transparent; }
+  html, body { overscroll-behavior: none; touch-action: manipulation; }
+  canvas { touch-action: none; }
+  #rotateHint {
+    display: none;
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    z-index: 30; pointer-events: none;
+    background: rgba(6,10,8,.85); border: 1px solid var(--line); border-radius: 10px;
+    padding: 6px 14px; font-size: 12px; color: var(--accent); letter-spacing: .05em;
+  }
+  /* ---- shared compact top bar (both mobile orientations) ---- */
+  @media (max-width: 900px), (max-height: 500px) {
+    #topbar { padding: 6px 8px; gap: 8px; }
+    #topbar h1 { font-size: 12px; letter-spacing: .08em; }
+    .stat { font-size: 12px; gap: 3px; }
+    .stat b { font-size: 15px; }
+    .stat.era { display: none; }
+    #hud-actions { gap: 5px; margin-left: auto; flex-wrap: nowrap; }
+    /* S07: Minimum 44px touch targets for mobile */
+    #hud-actions button { padding: 7px 9px; font-size: 13px; min-height: 44px; min-width: 44px; }
+    #chronoWrap { width: 72px; }
+    #chronoLabel { display: none; }
+    #chronoMeterTrack { height: 10px; }
+    #info { display: none; }
+    #chronoInfo { display: none; }
+    #sidebar h2 { display: none; }
+    /* intro overlay must scroll rather than clip the Start button */
+    #overlay { overflow-y: auto; justify-content: flex-start; padding: 20px 16px; }
+    #overlay h2 { font-size: 26px; }
+    #overlay h3 { font-size: 16px; }
+    #overlay p { font-size: 13px; }
+    #overlay .big { font-size: 36px; }
+    .howto { grid-template-columns: 1fr; gap: 8px; }
+    .howto div { padding: 10px; }
+  }
+  /* ---- LANDSCAPE phone / short-wide: board LEFT, shop RIGHT (compact) ---- */
+  @media (max-width: 900px) and (orientation: landscape) {
+    #stage { grid-template-columns: 1fr 200px; grid-template-rows: 1fr; }
+    #sidebar {
+      flex-direction: column; align-items: stretch;
+      overflow-y: auto; overflow-x: hidden;
+      padding: 8px; gap: 6px;
+      border-left: 1px solid var(--line); border-top: none;
+      min-height: 0;
+    }
+    #towerShop { grid-template-columns: 1fr; gap: 6px; }
+    .shopCard { min-width: 0; padding: 6px; text-align: left; flex-direction: row; align-items: center; }
+    .shopCard .name { font-size: 12px; }
+    .shopCard .cost { font-size: 11px; }
+    .shopCard .desc { display: none; }
+    .shopCard .icon { width: 30px; height: 30px; margin: 0 6px 0 0; flex-shrink: 0; }
+  }
+  /* ---- PORTRAIT phone / tall-narrow: board TOP, shop BOTTOM strip ---- */
+  @media (max-width: 900px) and (orientation: portrait) {
+    #topbar { flex-wrap: wrap; }
+    #stage { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+    #sidebar {
+      flex-direction: row; align-items: center;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+      padding: 8px 10px; gap: 8px;
+      border-left: none; border-top: 1px solid var(--line);
+      min-height: 64px; flex-shrink: 0;
+    }
+    #towerShop { grid-template-columns: repeat(5, 96px); gap: 6px; }
+    /* S07: Ensure shop cards have minimum 44px touch target height */
+    .shopCard { min-width: 88px; min-height: 80px; padding: 5px 6px; text-align: center; }
+    .shopCard .name { font-size: 11px; }
+    .shopCard .cost { font-size: 11px; }
+    .shopCard .desc { display: none; }
+    .shopCard .icon { width: 28px; height: 28px; margin: 0 auto 2px; }
+    #rotateHint { display: block; }
+    #waveBanner span {
+      font-size: clamp(14px, 5.5vw, 26px);
+      max-width: 92%;
+      white-space: nowrap;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div id="stats">
+      <h1>Jura Defense</h1>
+      <div class="stat">💰 <b id="uiMoney">0</b></div>
+      <div class="stat danger">❤️ <b id="uiLives">0</b></div>
+      <div class="stat">🌊 <b id="uiWave">0</b>/<b id="uiWaveMax">0</b></div>
+      <div class="stat era">⏱ <b id="uiTime">Cretaceous</b></div>
+    </div>
+    <div id="hud-actions">
+      <button id="startWaveBtn">▶ Start</button>
+      <button id="meteorBtn" title="Call a meteor (M). Limited.">☄️ <span id="uiMeteor">3</span></button>
+      <div id="chronoWrap" title="Chrono Charge — fills when dinos leak. Rewind (R) retraces the last 4s.">
+        <span id="chronoLabel">⟲</span>
+        <div id="chronoMeterTrack"><div id="uiChrono"></div></div>
+      </div>
+      <button id="chronoBtn" title="Rewind the last 4 seconds (R)">⟲</button>
+      <button id="ffwdBtn" title="Fast-forward (F)">⏩</button>
+      <button id="pauseBtn" title="Pause (Space)">⏸</button>
+      <button id="muteBtn" title="Sound (S)">🔊</button>
+    </div>
+  </div>
+  <div id="stage">
+    <div id="canvasWrap">
+      <canvas id="game"></canvas>
+      <div id="rotateHint">🔄 Rotate for best view</div>
+      <div id="waveBanner"><span></span></div>
+      <div id="pauseBadge">Paused</div>
+      <div id="overlay">
+        <!-- INTRO (onboarding) -->
+        <div id="introScreen" style="display:flex;flex-direction:column;align-items:center;gap:18px;width:100%">
+          <div class="big">🦖</div>
+          <h2>Jura Defense</h2>
+          <h3>Hold the Cretaceous line.</h3>
+          <p>
+            Your field rig tore a hole to the Late Cretaceous — and now the locals
+            want it back. Dinos pour in from the rift on the left. Keep them from
+            reaching the <b>Time Rig</b> on the right. Survive all 10 waves.
+          </p>
+          <div class="howto">
+            <div><span class="ico">🏗️</span><b>Build</b>Pick a tower card, click a glowing slot beside the path.</div>
+            <div><span class="ico">☄️</span><b>Meteor</b>3 charges, huge AoE. Save it for a horde or a T-Rex.</div>
+            <div><span class="ico">⟲</span><b>Chrono</b>Leaked dinos fill the time charge. Rewind retraces 4s.</div>
+          </div>
+          <div style="font-size:12px;color:var(--muted)">
+            <span class="key">Space</span> pause · <span class="key">F</span> 2× ·
+            <span class="key">M</span> meteor · <span class="key">R</span> rewind · <span class="key">Esc</span> cancel · <span class="key">S</span> sound
+          </div>
+          <div class="btn-row">
+            <button id="startGameBtn" class="primary">Start Expedition</button>
+          </div>
+        </div>
+        <!-- END (win / lose) -->
+        <div id="endScreen" style="display:none;flex-direction:column;align-items:center;gap:16px">
+          <div id="endEmoji" class="big"></div>
+          <h2 id="overlayTitle"></h2>
+          <p id="overlayMsg"></p>
+          <div class="btn-row">
+            <button id="overlayBtn" class="primary">Play Again</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="sidebar">
+      <h2>Build Towers</h2>
+      <div id="towerShop"></div>
+      <div id="info">
+        Click a tower card, then click a <b>glowing slot</b> to build.
+        <br/>Click a placed tower to <b>upgrade</b> or <b>sell</b>.
+        <br/><br/>
+        <span class="key">Space</span> pause ·
+        <span class="key">M</span> meteor ·
+        <span class="key">F</span> fast-forward
+      </div>
+      <div id="chronoInfo" style="font-size:11px;color:var(--muted);margin-top:8px">
+        <b style="color:#9fdcff">⟲ Chrono Charge</b> — leaks fill the meter.
+        <span class="key">R</span> rewinds the last 4s (enemies retrace, no revives).
+      </div>
+    </div>
+  </div>
+</div>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>

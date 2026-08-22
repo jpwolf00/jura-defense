@@ -1,0 +1,255 @@
+{
+  "dino_anky": {
+    "id": "dino_anky",
+    "file": "dino_anky.png",
+    "grid": 96,
+    "src": "jura_dino_anky_00001_.png",
+    "bg": null,
+    "w": 85,
+    "h": 66,
+    "ox": 6,
+    "oy": 25,
+    "scale": 0.1157,
+    "crop": [
+      35,
+      370,
+      760,
+      931
+    ],
+    "kind": "enemy",
+    "anim_frames": 4,
+    "frame_ms": 180
+  },
+  "dino_hadro": {
+    "id": "dino_hadro",
+    "file": "dino_hadro.png",
+    "grid": 96,
+    "src": "jura_dino_hadro_00001_.png",
+    "bg": null,
+    "w": 85,
+    "h": 81,
+    "ox": 6,
+    "oy": 10,
+    "scale": 0.0964,
+    "crop": [
+      66,
+      130,
+      936,
+      958
+    ],
+    "kind": "enemy",
+    "anim_frames": 4,
+    "frame_ms": 160
+  },
+  "dino_pterano": {
+    "id": "dino_pterano",
+    "file": "dino_pterano.png",
+    "grid": 96,
+    "src": "jura_dino_pterano_00001_.png",
+    "bg": null,
+    "w": 85,
+    "h": 47,
+    "ox": 6,
+    "oy": 44,
+    "scale": 0.0931,
+    "crop": [
+      20,
+      170,
+      921,
+      660
+    ],
+    "kind": "enemy",
+    "anim_frames": 3,
+    "frame_ms": 120,
+    "flying": true
+  },
+  "dino_raptor": {
+    "id": "dino_raptor",
+    "file": "dino_raptor.png",
+    "grid": 96,
+    "src": "jura_dino_raptor_00001_.png",
+    "bg": null,
+    "w": 85,
+    "h": 58,
+    "ox": 6,
+    "oy": 33,
+    "scale": 0.0976,
+    "crop": [
+      115,
+      337,
+      975,
+      920
+    ],
+    "kind": "enemy",
+    "anim_frames": 4,
+    "frame_ms": 160
+  },
+  "dino_trex": {
+    "id": "dino_trex",
+    "file": "dino_trex.png",
+    "grid": 96,
+    "src": "jura_dino_trex_00001_.png",
+    "bg": null,
+    "w": 85,
+    "h": 81,
+    "ox": 6,
+    "oy": 10,
+    "scale": 0.0888,
+    "crop": [
+      78,
+      120,
+      1023,
+      1023
+    ],
+    "kind": "enemy",
+    "anim_frames": 4,
+    "frame_ms": 200
+  },
+  "dino_trice": {
+    "id": "dino_trice",
+    "file": "dino_trice.png",
+    "grid": 96,
+    "src": "jura_dino_trice_00001_.png",
+    "bg": null,
+    "w": 85,
+    "h": 56,
+    "ox": 6,
+    "oy": 35,
+    "scale": 0.0868,
+    "crop": [
+      30,
+      217,
+      997,
+      850
+    ],
+    "kind": "enemy",
+    "anim_frames": 4,
+    "frame_ms": 180
+  },
+  "hero_bg": {
+    "id": "hero_bg",
+    "kind": "background",
+    "file": "jura_hero_bg_00001_.png",
+    "grid": 0,
+    "src": "jura_hero_bg_00001_.png",
+    "w": 1344,
+    "h": 768,
+    "ox": 0,
+    "oy": 0,
+    "scale": 1.0,
+    "crop": [
+      0,
+      0,
+      1344,
+      768
+    ],
+    "anim_frames": 1,
+    "frame_ms": 0
+  },
+  "portal": {
+    "id": "portal",
+    "file": "portal.png",
+    "grid": 96,
+    "src": "jura_portal_00001_.png",
+    "bg": null,
+    "w": 76,
+    "h": 85,
+    "ox": 10,
+    "oy": 6,
+    "scale": 0.1011,
+    "crop": [
+      177,
+      101,
+      920,
+      931
+    ],
+    "kind": "portal",
+    "anim_frames": 4,
+    "frame_ms": 150
+  },
+  "tower_aoe": {
+    "id": "tower_aoe",
+    "file": "tower_aoe.png",
+    "grid": 96,
+    "src": "jura_tower_aoe_00001_.png",
+    "bg": null,
+    "w": 70,
+    "h": 85,
+    "ox": 13,
+    "oy": 6,
+    "scale": 0.1143,
+    "crop": [
+      246,
+      238,
+      853,
+      972
+    ],
+    "kind": "tower",
+    "anim_frames": 1,
+    "frame_ms": 0
+  },
+  "tower_chrono": {
+    "id": "tower_chrono",
+    "file": "tower_chrono.png",
+    "grid": 96,
+    "src": "jura_tower_chrono_00001_.png",
+    "bg": null,
+    "w": 64,
+    "h": 85,
+    "ox": 16,
+    "oy": 6,
+    "scale": 0.09,
+    "crop": [
+      132,
+      91,
+      832,
+      1023
+    ],
+    "kind": "tower",
+    "anim_frames": 2,
+    "frame_ms": 200,
+    "glow": true
+  },
+  "tower_drone": {
+    "id": "tower_drone",
+    "file": "tower_drone.png",
+    "grid": 96,
+    "src": "jura_tower_drone_00001_.png",
+    "bg": null,
+    "w": 39,
+    "h": 85,
+    "ox": 29,
+    "oy": 6,
+    "scale": 0.0953,
+    "crop": [
+      306,
+      75,
+      705,
+      955
+    ],
+    "kind": "tower",
+    "anim_frames": 1,
+    "frame_ms": 0
+  },
+  "tower_tranq": {
+    "id": "tower_tranq",
+    "file": "tower_tranq.png",
+    "grid": 96,
+    "src": "jura_tower_tranq_00001_.png",
+    "bg": null,
+    "w": 85,
+    "h": 74,
+    "ox": 6,
+    "oy": 17,
+    "scale": 0.1152,
+    "crop": [
+      175,
+      267,
+      903,
+      903
+    ],
+    "kind": "tower",
+    "anim_frames": 1,
+    "frame_ms": 0
+  }
+}

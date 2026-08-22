@@ -1,0 +1,62 @@
+{
+  "dino_raptor": {
+    "kind": "dino",
+    "subject": "Velociraptor",
+    "prompt": "semi-realistic cinematic prehistoric creature design in the style of a Jurassic Park movie poster, dramatic warm rim lighting, highly detailed, game concept art, full body, three-quarter view facing LEFT, isolated subject on a plain dark teal studio background, sleek pack hunter Velociraptor, sickle claw on second toe, feather crest on back, alert crouched stance"
+  },
+  "dino_hadro": {
+    "kind": "dino",
+    "subject": "Hadrosaurus",
+    "prompt": "semi-realistic cinematic prehistoric creature design in the style of a Jurassic Park movie poster, dramatic warm rim lighting, highly detailed, game concept art, full body, three-quarter view facing LEFT, isolated subject on a plain dark teal studio background, large duck-billed herbivore Hadrosaurus, wide flat beak, small head crest, stocky quadrupedal-occasional-bipedal posture"
+  },
+  "dino_trice": {
+    "kind": "dino",
+    "subject": "Triceratops",
+    "prompt": "semi-realistic cinematic prehistoric creature design in the style of a Jurassic Park movie poster, dramatic warm rim lighting, highly detailed, game concept art, full body, three-quarter view facing LEFT, isolated subject on a plain dark teal studio background, heavy four-legged herbivore Triceratops, massive frill and three horns, bulky torso, slow deliberate stance"
+  },
+  "dino_anky": {
+    "kind": "dino",
+    "subject": "Ankylosaurus",
+    "prompt": "semi-realistic cinematic prehistoric creature design in the style of a Jurassic Park movie poster, dramatic warm rim lighting, highly detailed, game concept art, full body, three-quarter view facing LEFT, isolated subject on a plain dark teal studio background, armored herbivore Ankylosaurus, full body of thick bony plates and spikes, heavy club on tail end, low wide stance"
+  },
+  "dino_pterano": {
+    "kind": "dino",
+    "subject": "Pteranodon",
+    "prompt": "semi-realistic cinematic prehistoric creature design in the style of a Jurassic Park movie poster, dramatic warm rim lighting, highly detailed, game concept art, full body, three-quarter view facing LEFT, isolated subject on a plain dark teal studio background, huge flying reptile Pteranodon, long crested skull, enormous leathery wings spread, sharp beak, airborne pose"
+  },
+  "dino_trex": {
+    "kind": "dino",
+    "subject": "Tyrannosaurus Rex",
+    "prompt": "semi-realistic cinematic prehistoric creature design in the style of a Jurassic Park movie poster, dramatic warm rim lighting, highly detailed, game concept art, full body, three-quarter view facing LEFT, isolated subject on a plain dark teal studio background, apex predator Tyrannosaurus Rex, massive head and jaw with huge teeth, tiny arms, thick neck, heavy tail, towering stance"
+  },
+  "tower_tranq": {
+    "kind": "tower",
+    "subject": "tranquilizer cannon turret",
+    "prompt": "semi-realistic cinematic prehistoric creature design in the style of a Jurassic Park movie poster, dramatic warm rim lighting, highly detailed, game concept art, three-quarter view, isolated on plain dark teal studio background, tranquilizer cannon turret, sci-fi energy cannon on a rotating base, long barrel, glowing blue charge coils, compact tripod"
+  },
+  "tower_drone": {
+    "kind": "tower",
+    "subject": "drone swarm relay",
+    "prompt": "semi-realistic cinematic prehistoric creature design in the style of a Jurassic Park movie poster, dramatic warm rim lighting, highly detailed, game concept art, three-quarter view, isolated on plain dark teal studio background, drone swarm relay, small hovering relays launching micro-drones, hexagonal sci-fi frame, glowing green accents"
+  },
+  "tower_aoe": {
+    "kind": "tower",
+    "subject": "area-denial plasma launcher",
+    "prompt": "semi-realistic cinematic prehistoric creature design in the style of a Jurassic Park movie poster, dramatic warm rim lighting, highly detailed, game concept art, three-quarter view, isolated on plain dark teal studio background, area-denial plasma launcher, stubby mortar-style launcher, wide muzzle, orange plasma glow, heavy base with shock absorbers"
+  },
+  "tower_chrono": {
+    "kind": "tower",
+    "subject": "chrono distortion turret",
+    "prompt": "semi-realistic cinematic prehistoric creature design in the style of a Jurassic Park movie poster, dramatic warm rim lighting, highly detailed, game concept art, three-quarter view, isolated on plain dark teal studio background, chrono distortion turret, time-fracture emitter, two ring-like gyroscopes, purple-blue temporal glow, floating core"
+  },
+  "hero_bg": {
+    "kind": "background",
+    "subject": "massive landscape panorama",
+    "prompt": "semi-realistic cinematic prehistoric creature design in the style of a Jurassic Park movie poster, dramatic warm rim lighting, highly detailed, game concept art, wide cinematic 16:9 panorama, no characters, massive landscape panorama, Cretaceous badlands at dusk, silhouetted volcanoes, ancient ferns, glowing blue time-rig rift in the sky"
+  },
+  "portal": {
+    "kind": "portal",
+    "subject": "looping time-rig portal",
+    "prompt": "semi-realistic cinematic prehistoric creature design in the style of a Jurassic Park movie poster, dramatic warm rim lighting, highly detailed, game concept art, centered glowing rift, looping time-rig portal, circular glowing blue-white rift portal, swirling temporal energy rings, dark stone frame"
+  }
+}

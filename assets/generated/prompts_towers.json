@@ -1,0 +1,27 @@
+{
+  "tower_tranq": {
+    "kind": "tower",
+    "subject": "tranquilizer cannon turret",
+    "prompt": "tranquilizer cannon turret, single long-barreled energy cannon on a low rotating base, glowing blue charge coils along the barrel, compact three-point tripod mount. Style: sci-fi defense turret concept art, hard-surface mechanical design, metal and composite materials, subtle bio-tech accents, clean studio lighting with warm rim light, isolated on a plain dark teal studio background, three-quarter view, highly detailed, game asset"
+  },
+  "tower_drone": {
+    "kind": "tower",
+    "subject": "drone swarm relay tower",
+    "prompt": "drone swarm relay tower, tall hexagonal relay pylon with an emitter ring at the top launching small micro-drones, glowing green energy accents, stable base. Style: sci-fi defense turret concept art, hard-surface mechanical design, metal and composite materials, subtle bio-tech accents, clean studio lighting with warm rim light, isolated on a plain dark teal studio background, three-quarter view, highly detailed, game asset"
+  },
+  "tower_aoe": {
+    "kind": "tower",
+    "subject": "area-denial plasma mortar",
+    "prompt": "area-denial plasma mortar, stubby wide-muzzle mortar on a heavy shock-absorbing base, orange plasma glow in the open chamber, target-lock dish on the side. Style: sci-fi defense turret concept art, hard-surface mechanical design, metal and composite materials, subtle bio-tech accents, clean studio lighting with warm rim light, isolated on a plain dark teal studio background, three-quarter view, highly detailed, game asset"
+  },
+  "tower_chrono": {
+    "kind": "tower",
+    "subject": "chrono distortion emitter",
+    "prompt": "chrono distortion emitter, two counter-rotating gyroscope rings around a floating crystal core, purple-blue temporal energy glow, heavy anchor base with cables. Style: sci-fi defense turret concept art, hard-surface mechanical design, metal and composite materials, subtle bio-tech accents, clean studio lighting with warm rim light, isolated on a plain dark teal studio background, three-quarter view, highly detailed, game asset"
+  },
+  "portal": {
+    "kind": "portal",
+    "subject": "time-rig portal rift",
+    "prompt": "time-rig portal rift, perfectly centered circular rift, swirling blue-white temporal energy rings, dark stone frame, no creatures, no people, no environment beyond the frame, plain dark teal studio background. Style: sci-fi defense turret concept art, hard-surface mechanical design, metal and composite materials, subtle bio-tech accents, clean studio lighting with warm rim light, isolated on a plain dark teal studio background, three-quarter view, highly detailed, game asset"
+  }
+}
