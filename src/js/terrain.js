@@ -81,6 +81,13 @@ let _terrainPlate = null;
 if (typeof Image !== 'undefined') {
   _terrainPlate = new Image();
   _terrainPlate.onload = () => {
+    // Designed-together background: rebuild the painted plate once so the
+    // trail corridor contains ground instead of trees/rocks.
+    try {
+      if (typeof document !== 'undefined') {
+        _terrainPlateCanvas = buildCarvedBackground(_terrainPlate);
+      }
+    } catch { /* fall back to raw plate */ }
     _terrainPlateReady = true;
     _terrainCache = null;
   };
@@ -89,6 +96,78 @@ if (typeof Image !== 'undefined') {
     _terrainCache = null;
   };
   _terrainPlate.src = new URL('../assets/terrain_bg.png', import.meta.url).href;
+}
+
+let _terrainPlateCanvas = null;
+
+function samplePixel(c, x, y) {
+  try {
+    const d = c.getImageData(Math.max(0, Math.round(x)), Math.max(0, Math.round(y)), 1, 1).data;
+    return [d[0], d[1], d[2]];
+  } catch { return null; }
+}
+
+/**
+ * Rebuild the painted background so the trail corridor contains believable,
+ * locally-matched ground. Colours are sampled from the painting just outside
+ * the corridor on both flanks, then stroked inward in feathered passes — so
+ * trees/rocks on the route are replaced by ground continuous with their
+ * surroundings rather than a foreign stripe.
+ */
+export function buildCarvedBackground(srcCanvasOrImg) {
+  const w = VIEW_W, h = VIEW_H;
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const c = cv.getContext('2d');
+  c.drawImage(srcCanvasOrImg, 0, 0, w, h);
+  const pts = trailSpline();
+  const half = TRAIL_LINE_WIDTH / 2;
+  c.save();
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  // Soft grounding shadow under the full corridor.
+  c.strokeStyle = 'rgba(24,18,10,0.12)';
+  c.lineWidth = TRAIL_LINE_WIDTH * 2.2;
+  strokeSmoothTrail(c, pts);
+  // Feathered inward fills, colours sampled from both flanks.
+  const passes = [
+    { o: half * 1.95, wd: TRAIL_LINE_WIDTH * 1.82, a: 0.55 },
+    { o: half * 1.5, wd: TRAIL_LINE_WIDTH * 1.34, a: 0.8 },
+    { o: half * 1.08, wd: TRAIL_LINE_WIDTH * 1.04, a: 1 },
+  ];
+  for (const p of passes) {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const n = trailNormal(pts, i);
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      const cl = samplePixel(c, mx + n.x * p.o, my + n.y * p.o);
+      const cr = samplePixel(c, mx - n.x * p.o, my - n.y * p.o);
+      if (!cl || !cr) continue;
+      const pick = hash(i, 3) > 0.42 ? cl : cr;
+      c.strokeStyle = rgbStr(pick);
+      c.globalAlpha = p.a * (0.92 + hash(i, 7) * 0.14);
+      c.lineWidth = p.wd * (0.93 + hash(i, 11) * 0.14);
+      c.beginPath();
+      c.moveTo(a.x, a.y);
+      c.lineTo(b.x, b.y);
+      c.stroke();
+    }
+  }
+  c.globalAlpha = 1;
+  // Speckle so the repaired strip doesn't read as a clean smear.
+  for (let i = 0; i < pts.length; i += 3) {
+    const pt = pts[i], n = trailNormal(pts, i);
+    const off = (hash(i, 91) - 0.5) * TRAIL_LINE_WIDTH * 1.75;
+    const d = hash(i, 17);
+    c.fillStyle = d > 0.5
+      ? `rgba(${186 + Math.floor(d * 30)}, ${158 + Math.floor(d * 26)}, ${108}, 0.20)`
+      : 'rgba(96, 78, 48, 0.18)';
+    c.beginPath();
+    c.arc(pt.x + n.x * off, pt.y + n.y * off, 1.5 + d * 3.4, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.restore();
+  return cv;
 }
 
 function drawLayoutFeatures(c, w, h) {
@@ -212,9 +291,14 @@ function makeTerrainCanvas(w, h) {
   };
   for (let gx = 0; gx < w; gx += 24) {
     for (let gy = 0; gy < h; gy += 24) {
+      // Corridor-aware placement: skip detail that would sit under the trail.
+      if (withinTrailCorridor(gx, gy, TRAIL_LINE_WIDTH * 0.95)) continue;
       decorate(gx, gy);
     }
   }
+  // Designed-together carve: repaint the route corridor with continuous
+  // ground so background features (trees/rocks) never survive on the trail.
+  repaintTrailCorridor(c, TRAIL_LINE_WIDTH);
   drawLayoutFeatures(c, w, h);
   return C;
 }
@@ -222,7 +306,9 @@ function makeTerrainCanvas(w, h) {
 // Blit the cached terrain backdrop into the supplied canvas context.
 export function renderTerrainBackground(ctx, w, h) {
   if (_terrainPlateReady) {
-    ctx.drawImage(_terrainPlate, 0, 0, w, h);
+    // Prefer the carved variant (trail corridor rebuilt as ground).
+    const plate = _terrainPlateCanvas || _terrainPlate;
+    ctx.drawImage(plate, 0, 0, w, h);
     return;
   }
   if (!_terrainCache || _terrainCacheW !== w || _terrainCacheH !== h) {
@@ -230,6 +316,83 @@ export function renderTerrainBackground(ctx, w, h) {
     _terrainCacheW = w; _terrainCacheH = h;
   }
   ctx.drawImage(_terrainCache, 0, 0, w, h);
+}
+
+// ── Shared trail geometry ────────────────────────────────────────────────
+// The route spline is THE source of truth: the background corridor carve and
+// the trail detail both derive from it, so they are designed together.
+export const TRAIL_LINE_WIDTH = 52;
+
+let _splineCache = null;
+function trailSpline() {
+  if (!_splineCache) _splineCache = smoothTrail(WAYPOINTS, 22);
+  return _splineCache;
+}
+
+/** True if (x,y) sits within `margin` px of the trail centerline. */
+function withinTrailCorridor(x, y, margin) {
+  const pts = trailSpline();
+  const r2 = (margin) * (margin);
+  for (let i = 0; i < pts.length; i += 2) {
+    const dx = pts[i].x - x, dy = pts[i].y - y;
+    if (dx * dx + dy * dy < r2) return true;
+  }
+  return false;
+}
+
+/**
+ * Repaint the trail corridor with plausible ground BEFORE trail detail is
+ * drawn. Multi-pass round-cap strokes sample the terrain ramp colour at each
+ * segment, so any trees/rocks the background put on the route are replaced
+ * with continuous, locally-matched ground. This is what makes the trail read
+ * as cleared into the environment rather than stamped over it.
+ */
+function repaintTrailCorridor(c, lineWidth) {
+  const pts = trailSpline();
+  c.save();
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  // Soft grounding shadow under the whole corridor.
+  c.globalAlpha = 1;
+  c.strokeStyle = 'rgba(24, 18, 10, 0.10)';
+  c.lineWidth = lineWidth * 2.15;
+  strokeSmoothTrail(c, pts);
+  // Progressive ground repaint: wide faint passes feather the edge, the last
+  // pass fully restores ground. Colours are sampled from the terrain ramp so
+  // the repair is continuous with the surrounding field.
+  const passes = [
+    { wd: lineWidth * 1.95, alpha: 0.55 },
+    { wd: lineWidth * 1.55, alpha: 0.8 },
+    { wd: lineWidth * 1.18, alpha: 1 },
+  ];
+  for (const p of passes) {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      c.strokeStyle = rgbStr(rampColor(terrainValue(mx, my)));
+      c.globalAlpha = p.alpha;
+      c.lineWidth = p.wd * (0.94 + hash(i * 3, 7) * 0.12);
+      c.beginPath();
+      c.moveTo(a.x, a.y);
+      c.lineTo(b.x, b.y);
+      c.stroke();
+    }
+  }
+  c.globalAlpha = 1;
+  // Speckle the repaired ground so it isn't a clean stripe.
+  for (let i = 0; i < pts.length; i += 3) {
+    const pt = pts[i];
+    const n = trailNormal(pts, i);
+    const off = (hash(i, 91) - 0.5) * lineWidth * 1.7;
+    const d = hash(i, 17);
+    c.fillStyle = d > 0.5
+      ? `rgba(${186 + Math.floor(d * 30)}, ${158 + Math.floor(d * 26)}, ${108}, 0.20)`
+      : 'rgba(96, 78, 48, 0.18)';
+    c.beginPath();
+    c.arc(pt.x + n.x * off, pt.y + n.y * off, 1.5 + d * 3.2, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.restore();
 }
 
 // ── Organic trail rendering (cached plate) ──────────────────────────────
@@ -334,13 +497,13 @@ function makeTrailPlate(lineWidth) {
 
   // 4. Worn ruts — two faint parallel curves (sparse, non-mechanical).
   for (const side of [-1, 1]) {
-    c.strokeStyle = 'rgba(84, 64, 34, 0.22)';
-    c.lineWidth = 4;
-    c.setLineDash([26, 34]);
+    c.strokeStyle = 'rgba(84, 64, 34, 0.14)';
+    c.lineWidth = 3;
+    c.setLineDash([44, 60]);
     c.beginPath();
     for (let i = 0; i < pts.length; i++) {
       const n = trailNormal(pts, i);
-      const jit = (rand() - 0.5) * 4;
+      const jit = (rand() - 0.5) * 5;
       const rx = pts[i].x + n.x * side * half * 0.38 + jit;
       const ry = pts[i].y + n.y * side * half * 0.38;
       if (i === 0) c.moveTo(rx, ry); else c.lineTo(rx, ry);
