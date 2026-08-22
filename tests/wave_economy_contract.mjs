@@ -15,8 +15,8 @@ const enemy1 = { uid: 1, type: 'raptor', reward: 6 };
 const event1 = ctrl1.awardEnemyReward(enemy1);
 assert.equal(event1.type, EVENT_TYPE.MONEY_AWARDED);
 assert.equal(event1.payload.amount, 6);
-assert.equal(event1.payload.moneyAfter, 166);
-assert.equal(ctrl1.getState().money, 166);
+assert.equal(event1.payload.moneyAfter, 206);
+assert.equal(ctrl1.getState().money, 206);
 console.log('  ✓ Money awarded correctly');
 
 // Test 2: awardEnemyReward validates enemy object

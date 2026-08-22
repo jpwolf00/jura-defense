@@ -69,8 +69,11 @@ export class AbilityBridge {
     this.meteorTrail = this.scene.add.graphics().setDepth(100);
     this.meteorTrail.setVisible(false);
 
-    // P3-05: track last meteor target for impact FX
     this._lastMeteorTarget = null;
+
+    // ── Reticle position tracking for P0-2: meteor reticle visibility ──
+    this._reticleX = 0;
+    this._reticleY = 0;
 
     // Chrono charge meter (top-right HUD)
     this.chronoMeter = this.scene.add.graphics().setDepth(200);
@@ -93,6 +96,8 @@ export class AbilityBridge {
   // Update reticle position during targeting
   updateMeteorReticle(x, y) {
     if (!this.meteorTargeting || !this.meteorReticle) return;
+    this._reticleX = x;
+    this._reticleY = y;
     this.meteorReticle.clear();
     this.meteorReticle.lineStyle(2, 0xe0a458, 0.35);
     this.meteorReticle.strokeCircle(x, y, METEOR.radius);
@@ -164,7 +169,37 @@ export class AbilityBridge {
   }
 
   _updateMeteorPresentation() {
-    if (!this.scene || !this.meteor.target) {
+    if (!this.scene) return;
+
+    // ── Targeting mode: show reticle on meteorShadow ──────────────────
+    if (this.meteorTargeting && this.meteorReticle && this.meteorShadow) {
+      this.meteorShadow.setVisible(true);
+      this.meteorShadow.clear();
+      const rx = this._reticleX;
+      const ry = this._reticleY;
+      // High-visibility reticle ring
+      this.meteorShadow.lineStyle(3, 0xe0a458, 0.8);
+      this.meteorShadow.strokeCircle(rx, ry, METEOR.radius);
+      // Pulsing outer ring
+      this.meteorShadow.lineStyle(2, 0xe0a458, 0.4);
+      this.meteorShadow.strokeCircle(rx, ry, METEOR.radius + 8);
+      // Crosshair ticks
+      for (let i = 0; i < 4; i++) {
+        const a = (i * Math.PI) / 2;
+        const inner = METEOR.radius - 14;
+        const outer = METEOR.radius - 2;
+        this.meteorShadow.lineBetween(
+          rx + Math.cos(a) * inner, ry + Math.sin(a) * inner,
+          rx + Math.cos(a) * outer, ry + Math.sin(a) * outer
+        );
+      }
+      this.meteorRock?.setVisible(false);
+      this.meteorTrail?.setVisible(false);
+      return;
+    }
+
+    // ── Meteor falling: rock + shadow + trail ─────────────────────────
+    if (!this.meteor.target) {
       this.meteorShadow?.setVisible(false);
       this.meteorRock?.setVisible(false);
       this.meteorTrail?.setVisible(false);
@@ -175,26 +210,26 @@ export class AbilityBridge {
     const prog = Math.min(1, t / METEOR.telegraph);
 
     // Telegraph shadow (grows)
-    this.meteorShadow.setVisible(true);
-    this.meteorShadow.clear();
+    this.meteorShadow?.setVisible(true);
+    this.meteorShadow?.clear();
     const shadowR = 12 + (METEOR.radius * 0.55 - 12) * prog;
 
     // Radial gradient shadow
-    this.meteorShadow.fillStyle(0x000000, 0.55 * (1 - prog * 0.3));
-    this.meteorShadow.fillCircle(x, y, shadowR);
-    this.meteorShadow.lineStyle(2, 0xff8a3c, 0.35 * prog);
-    this.meteorShadow.strokeCircle(x, y, shadowR * 0.85);
+    this.meteorShadow?.fillStyle(0x000000, 0.55 * (1 - prog * 0.3));
+    this.meteorShadow?.fillCircle(x, y, shadowR);
+    this.meteorShadow?.lineStyle(2, 0xff8a3c, 0.35 * prog);
+    this.meteorShadow?.strokeCircle(x, y, shadowR * 0.85);
 
     // Impact reticle (dashed circle)
-    this.meteorShadow.lineStyle(3, 0xe0a458, 0.5 + 0.4 * prog);
-    this.meteorShadow.strokeCircle(x, y, METEOR.radius);
+    this.meteorShadow?.lineStyle(3, 0xe0a458, 0.5 + 0.4 * prog);
+    this.meteorShadow?.strokeCircle(x, y, METEOR.radius);
 
     // Crosshair ticks
     for (let i = 0; i < 4; i++) {
       const a = (i * Math.PI) / 2;
       const inner = METEOR.radius - 14;
       const outer = METEOR.radius - 2;
-      this.meteorShadow.lineBetween(
+      this.meteorShadow?.lineBetween(
         x + Math.cos(a) * inner, y + Math.sin(a) * inner,
         x + Math.cos(a) * outer, y + Math.sin(a) * outer
       );
@@ -205,18 +240,18 @@ export class AbilityBridge {
     const my = y - (1 - prog) * 420;
     const size = 10 + 14 * prog;
 
-    this.meteorRock.setVisible(true);
-    this.meteorRock.clear();
-    this.meteorRock.fillStyle(0x5a4636, 1);
-    this.meteorRock.fillCircle(mx, my, size);
-    this.meteorRock.lineStyle(3, 0xe07a3a, 1);
-    this.meteorRock.strokeCircle(mx, my, size);
+    this.meteorRock?.setVisible(true);
+    this.meteorRock?.clear();
+    this.meteorRock?.fillStyle(0x5a4636, 1);
+    this.meteorRock?.fillCircle(mx, my, size);
+    this.meteorRock?.lineStyle(3, 0xe07a3a, 1);
+    this.meteorRock?.strokeCircle(mx, my, size);
 
     // Fire trail
-    this.meteorTrail.setVisible(true);
-    this.meteorTrail.clear();
-    this.meteorTrail.lineStyle(6, 0xffb450, 0.7 * prog);
-    this.meteorTrail.lineBetween(mx - 18, my - 130, mx, my);
+    this.meteorTrail?.setVisible(true);
+    this.meteorTrail?.clear();
+    this.meteorTrail?.lineStyle(6, 0xffb450, 0.7 * prog);
+    this.meteorTrail?.lineBetween(mx - 18, my - 130, mx, my);
   }
 
   _updateChronoPresentation() {

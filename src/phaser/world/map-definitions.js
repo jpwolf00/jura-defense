@@ -76,14 +76,14 @@ export const map2 = Object.freeze({
   ]),
   palette: Object.freeze({
     ground: ['stone', 'mud', 'puddle'],
-    decorations: ['rock', 'stone', 'mud', 'puddle', 'fern'],
+    decorations: ['rock', 'stone', 'mud', 'puddle'],
     dominant: 'stone',
     colours: {
-      stone: 0x777568,
-      mud: 0x755238,
-      rock: 0x6b6b60,
-      puddle: 0x3e7890,
-      fern: 0x3c7a3c,
+      stone: 0x2d2d3d,    // basalt (dark volcanic grey)
+      mud: 0x1a1a2e,      // obsidian (deep black-blue)
+      rock: 0x4a4a5a,     // ash (mid volcanic grey)
+      puddle: 0x5a7d8c,   // crystal (blue-grey glass)
+      fern: 0x8b3a1f,     // ember (volcanic red-orange, replaces fern)
     },
   }),
 });

@@ -1,0 +1,16 @@
+[console.log] %c %c %c %c %c Phaser v3.90.0 (WebGL | Web Audio) %c https://phaser.io/v390 background: #ff0000 background: #ffff00 background: #00ff00 background: #00ffff color: #ffffff; background: #000000 background: transparent
+[console.warning] [.WebGL-0x10c004c6000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[console.warning] [.WebGL-0x10c004c6000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[console.warning] [.WebGL-0x10c004c6000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[console.warning] [.WebGL-0x10c004c6000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
+[console.warning] The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio
+[console.warning] The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio
+[console.warning] The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio
+[console.warning] The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio
+[1340x800/intro] captured -> docs/quality/captures/pre-polish/1340x800__intro.png
+[1340x800/quiet-build] captured -> docs/quality/captures/pre-polish/1340x800__quiet-build.png
+[1340x800/mid-wave-combat] captured -> docs/quality/captures/pre-polish/1340x800__mid-wave-combat.png
+[1340x800/meteor-telegraph] captured -> docs/quality/captures/pre-polish/1340x800__meteor-telegraph.png
+[1340x800/meteor-impact] captured -> docs/quality/captures/pre-polish/1340x800__meteor-impact.png
+[1340x800/tower-inspect] captured -> docs/quality/captures/pre-polish/1340x800__tower-inspect.png
+[1340x800/tower-upgrade] captured -> docs/quality/captures/pre-polish/1340x800__tower-upgrade.png

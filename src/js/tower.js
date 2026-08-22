@@ -95,6 +95,7 @@ export class Tower {
         slowDur: this.t.slowDur || 0,
         life: 2,
         trail: [],
+        towerType: this.type,            // S06: for color-coded projectile trails
       });
     }
   }

@@ -9,7 +9,7 @@ import {
 
 const initial = createInitialGameState();
 assert.equal(initial.phase, GAME_PHASE.INTRO);
-assert.equal(initial.money, 160);
+assert.equal(initial.money, 200);
 assert.equal(initial.lives, 20);
 assertGameState(initial);
 

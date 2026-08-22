@@ -71,6 +71,8 @@ export default class PathLayer extends Phaser.GameObjects.Container {
         this.emit('slotclick', { index: idx, x: slot.x, y: slot.y, occupied: this.isSlotOccupied(idx) });
       });
       this._slotMarkers.push(marker);
+      // Add marker to container so it gets scaled with the path layer
+      this.add(marker);
     }
   }
 
@@ -112,10 +114,48 @@ export default class PathLayer extends Phaser.GameObjects.Container {
     if (!hovered || hovered.occupied) return;
     const t = TOWER_TYPES[this._hoveredTowerType];
     if (!t) return;
-    const ring = this.scene.add.circle(hovered.x, hovered.y, t.range, color(t.color), 0.12);
+
+    // Determine affordability from the wave bridge economy
+    const money = globalThis.__juraWaveBridge?.state?.()?.money ?? Infinity;
+    const affordable = money >= t.cost;
+
+    // Range ring — green if affordable, red if not
+    const ringColor = affordable ? color(t.color) : 0xef5350;
+    const ringAlpha = affordable ? 0.15 : 0.08;
+    const ring = this.scene.add.circle(hovered.x, hovered.y, t.range, ringColor, ringAlpha);
+    ring.setStrokeStyle(1, ringColor, affordable ? 0.4 : 0.2);
     ring.setDepth(10);
     this.add(ring);
     this._ghostSprites.push(ring);
+
+    // Tower silhouette — scaled down version of the tower shape
+    const silhouette = this.scene.add.circle(hovered.x, hovered.y, 18, ringColor, affordable ? 0.5 : 0.2);
+    silhouette.setStrokeStyle(2, ringColor, affordable ? 0.8 : 0.4);
+    silhouette.setDepth(11);
+    this.add(silhouette);
+    this._ghostSprites.push(silhouette);
+
+    // Cost label — shows cost, red if unaffordable
+    const costLabel = this.scene.add.text(hovered.x, hovered.y + 26, `$${t.cost}`, {
+      fontSize: '12px',
+      color: affordable ? '#e0a458' : '#ef5350',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(12);
+    this.add(costLabel);
+    this._ghostSprites.push(costLabel);
+
+    // Invalid placement feedback — red X if unaffordable
+    if (!affordable) {
+      const invalidMark = this.scene.add.text(hovered.x, hovered.y - 26, '✕', {
+        fontSize: '18px',
+        color: '#ef5350',
+        stroke: '#000000',
+        strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(12);
+      this.add(invalidMark);
+      this._ghostSprites.push(invalidMark);
+    }
   }
 
   highlightSlot(index, color, alpha = 0.6) {

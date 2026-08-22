@@ -279,6 +279,8 @@ $muteBtn.addEventListener('click', () => {
   const m = !sfx.isMuted();
   sfx.setMuted(m);
   $muteBtn.textContent = m ? '🔇' : '🔊';
+  // S07: Persist mute state globally across scene transitions
+  globalThis.__juraMuted = m;
 });
 
 $overlayBtn.addEventListener('click', () => {

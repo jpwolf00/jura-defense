@@ -9,7 +9,7 @@ export const GAME_PHASE = Object.freeze({
 export function createInitialGameState(overrides = {}) {
   const base = {
     phase: GAME_PHASE.INTRO,
-    money: 160,
+    money: 200,
     lives: 20,
     wave: 1,
     totalWaves: 10,

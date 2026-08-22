@@ -143,11 +143,11 @@ export class HUDPanel {
   }
 
   /* ── helpers ──────────────────────────────────────────────────────── */
-
-  _hudLabel(base, fontSize) {
+  /** Create a HUD label with base text, font size, and a Y offset from the panel top. */
+  _hudLabel(base, fontSize, offsetY) {
     const s = this._scene._uiScale?.() ?? 1;
     const fs = Math.max(10, fontSize * s);
-    const text = this._scene.add.text(0, 0, base, {
+    const text = this._scene.add.text(0, offsetY ?? 0, base, {
       fontSize: `${fs}px`,
       color: '#ffffff',
       stroke: '#000000',
@@ -177,7 +177,16 @@ export class HUDPanel {
   /** Attach to a container for background painting (caller paints bg). */
   attachTo(container) {
     const pos = this._pos();
+    const s = this._scene._uiScale?.() ?? 1;
     this._group.setPosition(pos.x, pos.y);
+
+    // HUD text rows: vertical spacing prevents overlap (P0-1 fix)
+    const rowHeight = Math.max(16, 18 * s);
+    this.livesText.setPosition(0, 0);
+    this.moneyText.setPosition(0, rowHeight * 1.2);
+    this.waveText.setPosition(0, rowHeight * 2.4);
+    this.speedText.setPosition(0, rowHeight * 3.6);
+
     this._group.add(this.livesText);
     this._group.add(this.moneyText);
     this._group.add(this.waveText);

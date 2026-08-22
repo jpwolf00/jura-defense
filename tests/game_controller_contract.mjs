@@ -37,7 +37,7 @@ assert.equal(controller.victory(), null);
 
 // ── Economy contract ────────────────────────────────────────────────────
 const eco = createGameController();
-assert.equal(eco.getState().money, 160);
+assert.equal(eco.getState().money, 200);
 assert.equal(eco.getState().lives, 20);
 
 // Spending is allowed in INTRO and PLAYING
@@ -45,12 +45,12 @@ const spent = eco.spendMoney(20, 'tower');
 assert.equal(spent.type, EVENT_TYPE.MONEY_SPENT);
 assert.equal(spent.payload.amount, 20);
 assert.equal(spent.payload.description, 'tower');
-assert.equal(spent.payload.moneyAfter, 140);
-assert.equal(eco.getState().money, 140);
+assert.equal(spent.payload.moneyAfter, 180);
+assert.equal(eco.getState().money, 180);
 
 // Multiple spends accumulate correctly
 eco.spendMoney(40, 'ammo');
-assert.equal(eco.getState().money, 100);
+assert.equal(eco.getState().money, 140);
 
 // Insufficient funds throws
 assert.throws(() => eco.spendMoney(200), /insufficient funds/);
@@ -64,18 +64,18 @@ assert.throws(() => eco.spendMoney(3.5), /positive integer/);
 const refunded = eco.refundMoney(-20, 'ammo');
 assert.equal(refunded.type, EVENT_TYPE.MONEY_REFUNDED);
 assert.equal(refunded.payload.amount, -20);
-assert.equal(refunded.payload.moneyAfter, 120);
-assert.equal(eco.getState().money, 120);
+assert.equal(refunded.payload.moneyAfter, 160);
+assert.equal(eco.getState().money, 160);
 
 // Refunding with positive amount throws
 assert.throws(() => eco.refundMoney(10), /negative integer/);
 assert.throws(() => eco.refundMoney(0), /negative integer/);
 
-// Refund can bring money back above the initial 160
+// Refund can bring money back above the initial 200
 eco.spendMoney(100, 'big');
-assert.equal(eco.getState().money, 20);
+assert.equal(eco.getState().money, 60);
 eco.refundMoney(-100, 'refund');
-assert.equal(eco.getState().money, 120);
+assert.equal(eco.getState().money, 160);
 
 // ── Economy events are emitted and drainable ─────────────────────────────
 const events = eco.drainEvents();
@@ -92,7 +92,7 @@ const u = eco.subscribe((state, event) => {
 });
 eco.spendMoney(5);
 assert.equal(moneySnapshots.length, 1);
-assert.equal(moneySnapshots[0].state.money, 115);
+assert.equal(moneySnapshots[0].state.money, 155);
 u();
 eco.spendMoney(5); // unsubscribed, should not appear
 assert.equal(moneySnapshots.length, 1);
@@ -101,12 +101,12 @@ assert.equal(moneySnapshots.length, 1);
 // Spend during INTRO is valid
 const intro = createGameController();
 intro.spendMoney(10, 'prep');
-assert.equal(intro.getState().money, 150);
+assert.equal(intro.getState().money, 190);
 
 // Spend during PLAYING
 intro.start();
 intro.spendMoney(10, 'after-start');
-assert.equal(intro.getState().money, 140);
+assert.equal(intro.getState().money, 180);
 
 // ── Overridden initial money ─────────────────────────────────────────────
 const small = createGameController({ money: 50 });
@@ -122,10 +122,10 @@ post.start();
 post.defeat();
 assert.equal(post.getState().phase, 'DEFEAT');
 post.spendMoney(1, 'post-mortem');
-assert.equal(post.getState().money, 159);
+assert.equal(post.getState().money, 199);
 
 // ── restart resets money ─────────────────────────────────────────────────
 post.restart();
-assert.equal(post.getState().money, 160);
+assert.equal(post.getState().money, 200);
 
 console.log('game-controller contract passed');

@@ -11,6 +11,9 @@ import { WaveBridge, installWaveBridgeContract } from './wave-bridge.js';
 import { TOWER_TYPES } from '../js/tower.js';
 import FXSystem, { addFXSystem } from './systems/FXSystem.js';
 import AudioSystem, { addAudioSystem } from './systems/AudioSystem.js';
+import { HUDPanel } from './ui/hud-panel.js';
+import { TowerShelf } from './ui/tower-shelf.js';
+import { TowerInspectionPanel, OnboardingOverlay } from './ui/overlay-ui.js';
 
 export default class PlaygroundScene extends Phaser.Scene {
   constructor() { super('PlaygroundScene'); }
@@ -76,15 +79,25 @@ export default class PlaygroundScene extends Phaser.Scene {
     this._selectedTowerSprite = null;
     globalThis.__juraSelectedTowerContract = null;
 
-    // ── P3-05: Register FX + Audio plugins ────────────────────────────
+    // P3-05: Register FX + Audio plugins
     this.fxSystem = addFXSystem(this);
     this.audioSystem = addAudioSystem(this);
     globalThis.__juraFXSystem = this.fxSystem;
     globalThis.__juraAudioSystem = this.audioSystem;
-    globalThis.__juraAudioSystem.setGlobalMute(false);
+    // S07: Respect persisted mute state across scene transitions
+    const persistedMute = globalThis.__juraMuted ?? false;
+    globalThis.__juraAudioSystem.setGlobalMute(persistedMute);
 
-    // Mute toggle button — press the icon in the action bar
-    this._muted = false;
+    // S06: Unlock audio on first user gesture (required by browsers)
+    this.input.once('pointerdown', () => {
+      this.audioSystem?.unlock();
+    });
+    this.input.keyboard?.once('keydown', () => {
+      this.audioSystem?.unlock();
+    });
+
+    // S07: Mute toggle button — press the icon in the action bar
+    this._muted = persistedMute;
 
     const demoTower = new Tower('tranq', 180, 250);
     this._demoTowerSprite = new TowerSprite(this, demoTower);
@@ -104,7 +117,6 @@ export default class PlaygroundScene extends Phaser.Scene {
       }
       const state = sprite.getTowerState();
       globalThis.__juraSelectedTowerContract = sprite.selected ? state : null;
-      this._updateTowerHud();
     });
 
     // ============================================================
@@ -133,35 +145,6 @@ export default class PlaygroundScene extends Phaser.Scene {
       towerStates: this._getTowerStates(),
     };
 
-    // Tower type selector: press T to cycle through types
-    // Responsive: top-right, 10% from right edge.
-    const uiScale = this._uiScale();
-    this._towerTypeText = this.add.text(
-      this.scale.width * 0.92, 120 * uiScale, '', {
-        fontSize: `${Math.max(12, 14 * uiScale)}px`,
-        color: '#e0a458',
-        backgroundColor: '#000000cc',
-        padding: { x: 8, y: 6 },
-      }
-    ).setScrollFactor(0).setOrigin(1, 0);
-    this._towerTypeText.setText(this._towerTypeLabel());
-
-    // Placement HUD: shows preview cost + instructions
-    // Responsive: bottom-left, scales with uiScale.
-    this.placementHud = this.add.text(20, 560 * uiScale, '', {
-      fontSize: `${Math.max(10, 14 * uiScale)}px`,
-      color: '#ffffff',
-      backgroundColor: '#000000cc',
-      padding: { x: 8, y: 6 }, align: 'left',
-    }).setScrollFactor(0);
-    this.placementHud.setText('Place: click empty slot. T=cycle type. U=upgrade. R=sell. Hover to preview.');
-    this._slotHoverText = this.add.text(20, 590 * uiScale, '', {
-      fontSize: `${Math.max(9, 13 * uiScale)}px`,
-      color: '#e0a458',
-      backgroundColor: '#000000aa',
-      padding: { x: 8, y: 6 },
-    }).setScrollFactor(0);
-
     // Wire path-layer slot clicks
     pathLayer.on('slotclick', (data) => this._onSlotClick(data));
     pathLayer.on('slothover', (data) => this._onSlotHover(data));
@@ -174,16 +157,6 @@ export default class PlaygroundScene extends Phaser.Scene {
 
     // Keyboard: U to upgrade selected tower (P2-08)
     this.input.keyboard.addKey('U').on('down', () => this._upgradeSelected());
-
-    // Tower inspection HUD — below placement HUD (responsive)
-    this.towerHud = this.add.text(20, (560 + 70) * uiScale, '', {
-      fontSize: `${Math.max(10, 14 * uiScale)}px`,
-      color: '#ffffff',
-      backgroundColor: '#000000cc',
-      padding: { x: 8, y: 6 },
-      align: 'left',
-    }).setScrollFactor(0);
-    this._updateTowerHud();
 
     const demoEnemy = new Enemy('raptor', 1);
     demoEnemy.dist = 420;
@@ -202,9 +175,9 @@ export default class PlaygroundScene extends Phaser.Scene {
         this.audioSystem?.play('tower-' + type);
         this.fxSystem?.muzzleFlash(x, y, type);
       },
-      hitCB: (x, y, status) => {
+      hitCB: (x, y, status, damage) => {
         this.audioSystem?.play('combat-' + status);
-        this.fxSystem?.hitFlash(x, y, status);
+        this.fxSystem?.hitFlash(x, y, status, damage);
       },
       killCB: (x, y, species) => {
         this.audioSystem?.play('combat-kill');
@@ -253,7 +226,10 @@ export default class PlaygroundScene extends Phaser.Scene {
 
     // Wire pointer input for meteor targeting
     this.input.on('pointerdown', (pointer) => {
-      if (this.abilityBridge?.meteorTargeting) {
+      // Don't fire meteor if the click landed on a UI button
+      const hitObjects = this.input.hitTestPointer(pointer);
+      const hitUI = hitObjects.some(obj => obj.input && obj.input.enabled);
+      if (!hitUI && this.abilityBridge?.meteorTargeting) {
         this.abilityBridge.fireMeteor(pointer.x, pointer.y);
       }
     });
@@ -261,13 +237,32 @@ export default class PlaygroundScene extends Phaser.Scene {
       this.abilityBridge?.updateMeteorReticle(pointer.x, pointer.y);
     });
 
-    // HUD for wave bridge state — top-left, responsive
-    this.waveHudText = this.add.text(20, 120 * uiScale, '', {
-      fontSize: `${Math.max(10, 16 * uiScale)}px`,
-      color: '#ffffff',
-      backgroundColor: '#000000aa',
-      padding: { x: 8, y: 6 },
-    }).setScrollFactor(0);
+    // ── S05: Integrated HUD Panel (authoritative source for lives/money/wave/speed) ──
+    this.hudPanel = new HUDPanel(this);
+    this.hudPanel.attachTo(this.add.container(0, 0));
+    this.hudPanel.paintBackground();
+    globalThis.__juraHUDPanel = this.hudPanel;
+
+    // ── S05: Tower Shelf (bottom bar for tower selection) ──
+    this.towerShelf = new TowerShelf(this);
+    this.towerShelf.build(this._towerTypeKeys, { money: 0 });
+    globalThis.__juraTowerShelf = this.towerShelf;
+
+    // ── S05: Tower Inspection Panel (contextual upgrade/sell UI) ──
+    this.inspectionPanel = new TowerInspectionPanel(this);
+    globalThis.__juraInspectionPanel = this.inspectionPanel;
+
+    // Wire scene callbacks for inspection panel actions
+    this._onUpgrade = () => this._upgradeSelected();
+    this._onSell = () => this._sellSelected();
+    this._onTowerTypeSelect = (type) => {
+      const idx = this._towerTypeKeys.indexOf(type);
+      if (idx >= 0) {
+        this._selectedTowerTypeIndex = idx;
+        this._pathLayer.setHoverTowerType(type);
+        this.towerShelf.setSelectedType(type);
+      }
+    };
 
     // ── Action buttons — responsive layout at bottom of canvas ──────────
     //
@@ -276,6 +271,7 @@ export default class PlaygroundScene extends Phaser.Scene {
     // All buttons fully inside 0..scale.width, minimum 48x48 (WCAG 2.5.5)
     // ────────────────────────────────────────────────────────────────────
     const isNarrowLayout = this.scale.width < 600;
+    const uiScale = this._uiScale();
     const btnH = Math.max(48, 50 * uiScale);
     const btnGap = Math.max(8, 16 * uiScale);
     
@@ -436,10 +432,16 @@ export default class PlaygroundScene extends Phaser.Scene {
     this.anims.create({ key: 'raptor-walk', frames: this.anims.generateFrameNumbers('raptorWalk', { start: 0, end: 5 }), frameRate: 8, repeat: -1 });
     walker.play('raptor-walk');
 
-    this.add.text(20, 20, 'Jura Defense Phaser Scale Spike', { fontSize: '28px', color: '#00ff88' });
-    this.pointerText = this.add.text(20, 60, 'Pointer: (0, 0)', { fontSize: '18px', color: '#ffffff' });
+    // Debug text — only shown when ?debug=1 query param is present
+    const isDebug = new URLSearchParams(globalThis.location.search).get('debug') === '1';
+    if (isDebug) {
+      this.add.text(20, 20, 'Jura Defense Phaser Scale Spike', { fontSize: '28px', color: '#00ff88' });
+      this.pointerText = this.add.text(20, 60, 'Pointer: (0, 0)', { fontSize: '18px', color: '#ffffff' });
+    }
     this.input.on('pointermove', (pointer) => {
-      this.pointerText.setText(`Pointer: (${Math.round(pointer.x)}, ${Math.round(pointer.y)})`);
+      if (this.pointerText) {
+        this.pointerText.setText(`Pointer: (${Math.round(pointer.x)}, ${Math.round(pointer.y)})`);
+      }
       globalThis.__juraPhaserPointer = { x: pointer.x, y: pointer.y };
     });
 
@@ -705,19 +707,22 @@ export default class PlaygroundScene extends Phaser.Scene {
     if (this.combatBridge) globalThis.__juraCombatState = this.combatBridge.getState();
     this.waveBridge?.update(delta);
     this.abilityBridge?.update(dt * (this.waveBridge?.timeScale || 1));
-    if (this.waveBridge && this.waveHudText) {
-      const s = this.waveBridge.state();
-      const ab = this.abilityBridge?.state() || { meteor: {}, chrono: {} };
-      this.waveHudText.setText(
-        `Wave: ${s.waveNumber}/${s.totalWaves}  ${s.hint}\n` +
-        `Spawned: ${s.enemiesSpawned}  Alive: ${s.enemiesAlive}\n` +
-        `Phase: ${s.phase}  Speed: ${s.timeScale}×\n` +
-        `Money: ${s.money}  Lives: ${s.lives}\n` +
-        `☄️ Meteor: ${ab.meteor.charges}/${ab.meteor.maxCharges}  ` +
-        `${ab.meteor.targeting ? '[TARGETING]' : ab.meteor.ready ? 'READY' : 'cooling'}\n` +
-        `⏳ Chrono: ${Math.round(ab.chrono.pct * 100)}%  ${ab.chrono.ready ? 'READY' : 'charging'}`
-      );
+
+    // ── S05: Update integrated HUD systems ──
+    if (this.hudPanel) {
+      this.hudPanel.update();
     }
+    if (this.towerShelf && this.waveBridge) {
+      const state = this.waveBridge.state();
+      this.towerShelf.update({ money: state.money });
+    }
+    if (this.inspectionPanel && this._selectedTowerSprite) {
+      const towerState = this._selectedTowerSprite.getTowerState();
+      this.inspectionPanel.show(towerState);
+    } else if (this.inspectionPanel) {
+      this.inspectionPanel.hide();
+    }
+
     // Refresh placement contract every frame for live inspection
     if (globalThis.__juraPlacementContract) {
       globalThis.__juraPlacementContract.selectedType = this._towerTypeKeys[this._selectedTowerTypeIndex];
@@ -758,8 +763,11 @@ export default class PlaygroundScene extends Phaser.Scene {
 
   _cycleTowerType() {
     this._selectedTowerTypeIndex = (this._selectedTowerTypeIndex + 1) % this._towerTypeKeys.length;
-    this._towerTypeText.setText(this._towerTypeLabel());
-    this._pathLayer.setHoverTowerType(this._towerTypeKeys[this._selectedTowerTypeIndex]);
+    const newType = this._towerTypeKeys[this._selectedTowerTypeIndex];
+    this._pathLayer.setHoverTowerType(newType);
+    if (this.towerShelf) {
+      this.towerShelf.setSelectedType(newType);
+    }
   }
 
   _onSlotClick(data) {
@@ -805,7 +813,6 @@ export default class PlaygroundScene extends Phaser.Scene {
     sprite.setSelected(true);
     this._selectedTowerSprite = sprite;
     globalThis.__juraSelectedTowerContract = sprite.getTowerState();
-    this._updateTowerHud();
 
     // P3-05: FX + audio for tower placement
     this._pathLayer.highlightSlot(index, 0x00ff88, 0.5);
@@ -816,21 +823,12 @@ export default class PlaygroundScene extends Phaser.Scene {
 
   _onSlotHover(data) {
     if (data) {
-      const t = TOWER_TYPES[this._towerTypeKeys[this._selectedTowerTypeIndex]];
-      const slotStr = data.occupied
-        ? `[occupied: ${data.towerType || 'tower'}]`
-        : `[free — click to place ${t.name}]`;
-      this._slotHoverText.setText(
-        `Slot ${data.index} (${data.x}, ${data.y}) — ${slotStr}  ` +
-        (data.occupied ? `Range: ${t.range}` : `Preview range: ${t.range}  [cost: ${t.cost} preview]`)
-      );
       if (!data.occupied) {
         this._pathLayer.setHoverTowerType(this._towerTypeKeys[this._selectedTowerTypeIndex]);
       } else {
         this._pathLayer.setHoverTowerType(null);
       }
     } else {
-      this._slotHoverText.setText('');
       this._pathLayer.setHoverTowerType(null);
     }
   }
@@ -872,7 +870,6 @@ export default class PlaygroundScene extends Phaser.Scene {
     if (csIdx !== -1) this.combatBridge.towerSprites.splice(csIdx, 1);
     this._selectedTowerSprite = null;
     globalThis.__juraSelectedTowerContract = null;
-    this._updateTowerHud();
 
     // P3-05: FX + audio for tower sell
     this.fxSystem?.sellConfirm(tower.x, tower.y);
@@ -926,7 +923,6 @@ export default class PlaygroundScene extends Phaser.Scene {
     // Update sprite state
     sprite.syncFromTower();
     globalThis.__juraSelectedTowerContract = sprite.getTowerState();
-    this._updateTowerHud();
 
     // P3-05: FX + audio for tower upgrade
     this.fxSystem?.placeConfirm(tower.x, tower.y);
@@ -941,24 +937,4 @@ export default class PlaygroundScene extends Phaser.Scene {
   }
 
   // ---- End P2-05 ----
-
-  _updateTowerHud() {
-    if (!this._selectedTowerSprite || !this._selectedTowerSprite.selected) {
-      this.towerHud.setText('');
-      return;
-    }
-    const t = this._selectedTowerSprite.tower;
-    const typeInfo = t.t;
-    const canUp = t.canUpgrade();
-    const upCost = canUp ? t.upgradeCost() : 0;
-    const upStr = canUp ? `[${upCost}] (U)` : 'MAX';
-    this.towerHud.setText(
-      `▸ ${typeInfo.name} [L${t.level}]\n` +
-      `  dmg: ${Math.round(t.dmg)}  range: ${Math.round(t.range)}\n` +
-      `  rate: ${typeInfo.rate}s  color: ${typeInfo.color}\n` +
-      `  upgrade: ${upStr}  sell: ${t.sellValue()}\n` +
-      `  desc: ${typeInfo.desc}\n` +
-      `  pos: (${t.x}, ${t.y})`
-    );
-  }
 }

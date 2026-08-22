@@ -51,9 +51,9 @@ console.log('\n4. Placement contract money exposure');
 const controller4 = createGameController();
 const state4 = controller4.getState();
 assert.equal(typeof state4.money, 'number', 'state().money is a number');
-assert.equal(state4.money, 160, 'Initial money is 160');
+assert.equal(state4.money, 200, 'Initial money is 200');
 controller4.spendMoney(50, 'test');
-assert.equal(controller4.getState().money, 110, 'Money updated after spend');
+assert.equal(controller4.getState().money, 150, 'Money updated after spend');
 console.log('  ✓ Controller state exposes money for HUD');
 
 // Test 5: Multiple placements accumulate

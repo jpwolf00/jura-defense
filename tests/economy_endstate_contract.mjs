@@ -14,7 +14,7 @@ const bridge1 = new WaveBridge();
 const contract1 = installWaveBridgeContract(bridge1);
 assert.equal(typeof contract1.money, 'number', 'money is a number');
 assert.equal(typeof contract1.lives, 'number', 'lives is a number');
-assert.equal(contract1.money, 160, 'Initial money is 160');
+assert.equal(contract1.money, 200, 'Initial money is 200');
 assert.equal(contract1.lives, 20, 'Initial lives is 20');
 console.log('  ✓ Money and lives exposed on contract');
 
@@ -63,7 +63,7 @@ contract4.victory();
 assert.equal(contract4.phase, 'VICTORY', 'Phase is VICTORY before restart');
 const restartResult = contract4.restart();
 assert.equal(contract4.phase, 'INTRO', 'Phase is INTRO after restart');
-assert.equal(contract4.money, 160, 'Money reset to 160');
+assert.equal(contract4.money, 200, 'Money reset to 200');
 assert.equal(contract4.lives, 20, 'Lives reset to 20');
 assert.ok(restartResult !== null, 'restart() returned an event');
 assert.equal(restartResult.type, EVENT_TYPE.GAME_RESTARTED, 'Event type is GAME_RESTARTED');
@@ -88,7 +88,7 @@ const bridge6 = new WaveBridge();
 const state6 = bridge6.state();
 assert.equal(typeof state6.money, 'number', 'state().money is a number');
 assert.equal(typeof state6.lives, 'number', 'state().lives is a number');
-assert.equal(state6.money, 160, 'state().money is 160');
+assert.equal(state6.money, 200, 'state().money is 200');
 assert.equal(state6.lives, 20, 'state().lives is 20');
 console.log('  ✓ state() includes money and lives');
 

@@ -22,6 +22,8 @@ export default class AudioSystem extends Phaser.Plugins.BasePlugin {
     this._muted = false;
     this._throttleMs = 40;
     this._lastPlay = -Infinity;
+    this._unlocked = false; // S06: gate audio on first user gesture
+    this._pendingPlays = []; // Queue plays until unlocked
   }
 
   /* ── AudioContext bootstrap ─────────────────────────────────────── */
@@ -30,15 +32,48 @@ export default class AudioSystem extends Phaser.Plugins.BasePlugin {
     if (!this._ctx) {
       this._ctx = new (window.AudioContext || window.webkitAudioContext)();
     }
-    if (this._ctx.state === 'suspended') {
-      this._ctx.resume();
-    }
     return this._ctx;
+  }
+
+  /** Unlock audio on first user gesture (required by browsers) */
+  unlock() {
+    if (this._unlocked) return;
+    const ctx = this._getContext();
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(() => {
+        this._unlocked = true;
+        // Play any queued sounds
+        this._pendingPlays.forEach(({ key, vol }) => this._playInternal(key, vol));
+        this._pendingPlays = [];
+      });
+    } else {
+      this._unlocked = true;
+      this._pendingPlays.forEach(({ key, vol }) => this._playInternal(key, vol));
+      this._pendingPlays = [];
+    }
   }
 
   /** Play a synthesized sound by key. */
   play(key, _volume) {
     if (this._muted) return;
+    
+    // S06: Gate on first user gesture
+    if (!this._unlocked) {
+      const ctx = this._getContext();
+      const channel = this._channel(key);
+      const vol = (channel ? CHANNELS[channel] : 0.5);
+      this._pendingPlays.push({ key, vol });
+      // Try to unlock if context is running
+      if (ctx.state === 'running') {
+        this.unlock();
+      }
+      return;
+    }
+    
+    this._playInternal(key, _volume);
+  }
+
+  _playInternal(key, _volume) {
     const now = performance.now();
     if (now - this._lastPlay < this._throttleMs) {
       return; // throttle similar sounds
