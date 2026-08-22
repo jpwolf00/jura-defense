@@ -194,6 +194,7 @@ export class TowerInspectionPanel {
       strokeThickness: 2,
     }).setOrigin(0.5).setDepth(1);
     btn._bg = bg;
+    btn._label = label;
     btn.add([bg, label]);
     btn.setInteractive(new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
     btn.setFillStyle = (...args) => { bg.setFillStyle(...args); return btn; };
@@ -268,18 +269,18 @@ export class TowerInspectionPanel {
     const canUpgrade = towerRef.canUpgrade?.() || (lvl < 5);
     this._upgradeBtn.setPosition(0, 35);
     this._upgradeBtn.setAlpha(canUpgrade ? 1 : 0.4);
-    this._upgradeBtn.children[1].setAlpha(canUpgrade ? 1 : 0.4);
+    this._upgradeBtn._label.setAlpha(canUpgrade ? 1 : 0.4);
     if (!canUpgrade) {
-      this._upgradeBtn.children[1].setText('MAX');
+      this._upgradeBtn._label.setText('MAX');
     } else {
       const upgCost = towerRef.upgradeCost?.();
-      this._upgradeBtn.children[1].setText(upgCost != null ? `UPG $${upgCost}` : 'UPGRADE');
+      this._upgradeBtn._label.setText(upgCost != null ? `UPG $${upgCost}` : 'UPGRADE');
     }
 
     // Sell button
     const sellVal = towerRef.sellValue?.();
     this._sellBtn.setPosition(0, -35);
-    this._sellBtn.children[1].setText(sellVal != null ? `SELL $${sellVal}` : 'SELL');
+    this._sellBtn._label.setText(sellVal != null ? `SELL $${sellVal}` : 'SELL');
   }
 
   hide() {
@@ -312,7 +313,9 @@ export class OnboardingOverlay {
     this._scene = scene;
     this._group = scene.add.container(0, 0);
     this._group.setScrollFactor(0).setDepth(160);
-    this._dismissed = false;
+    
+    // Check localStorage for previous dismissal
+    this._dismissed = this._checkLocalStorage();
 
     this._bg = scene.add.rectangle(640, 360, 900, 500, 0x000000, 0.55)
       .setScrollFactor(0).setDepth(155);
@@ -355,15 +358,32 @@ export class OnboardingOverlay {
     this.dismissBtn.on('pointerout', () => this._dismissBtnBg.clearTint());
 
     this._group.add([this._bg, this._panel, this.titleText, this.bodyText, this.dismissBtn]);
-    this._group.setVisible(true);
+    this._group.setVisible(!this._dismissed);
 
     this._scene.events.once('shutdown', () => {
       this.destroy();
     });
   }
 
+  _checkLocalStorage() {
+    try {
+      return localStorage.getItem('jura-onboarding-dismissed') === 'true';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  _saveToLocalStorage() {
+    try {
+      localStorage.setItem('jura-onboarding-dismissed', 'true');
+    } catch (e) {
+      // Ignore storage errors
+    }
+  }
+
   dismiss() {
     this._dismissed = true;
+    this._saveToLocalStorage();
     this._group.setVisible(false);
     this._scene.events.emit('onboarding-dismissed');
   }
