@@ -143,8 +143,17 @@ export function buildCarvedBackground(srcCanvasOrImg) {
       const cl = samplePixel(c, mx + n.x * p.o, my + n.y * p.o);
       const cr = samplePixel(c, mx - n.x * p.o, my - n.y * p.o);
       if (!cl || !cr) continue;
+      // Flank sample keeps locality, but blend toward the procedural ground
+      // ramp so forest stretches clear to EARTH rather than inheriting
+      // canopy green from both sides (the "trail through trees" tell).
       const pick = hash(i, 3) > 0.42 ? cl : cr;
-      c.strokeStyle = rgbStr(pick);
+      const g = rampColor(terrainValue(mx, my));
+      const gb = 0.62; // ground bias
+      c.strokeStyle = rgbStr([
+        Math.round(pick[0] * (1 - gb) + g[0] * gb),
+        Math.round(pick[1] * (1 - gb) + g[1] * gb),
+        Math.round(pick[2] * (1 - gb) + g[2] * gb),
+      ]);
       c.globalAlpha = p.a * (0.92 + hash(i, 7) * 0.14);
       c.lineWidth = p.wd * (0.93 + hash(i, 11) * 0.14);
       c.beginPath();
