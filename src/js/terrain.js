@@ -1,5 +1,5 @@
 import { generateMapLayout } from './map-layout.js';
-import { WAYPOINTS, SLOTS } from './path.js';
+import { WAYPOINTS, SLOTS, VIEW_W, VIEW_H } from './path.js';
 
 // Terrain-first board renderer for Jura Defense gameplay.
 // Produces a clear, non-photoreal Jurassic battlefield backdrop.
@@ -232,44 +232,181 @@ export function renderTerrainBackground(ctx, w, h) {
   ctx.drawImage(_terrainCache, 0, 0, w, h);
 }
 
-// Render the winding enemy trail over terrain as a visible earth road.
+// ── Organic trail rendering (cached plate) ──────────────────────────────
+// The trail is drawn once to an offscreen canvas (same pattern as the terrain
+// plate) so per-frame cost is a single drawImage. It reads as a worn dirt
+// trail: spline-rounded corners, width wobble, mottled dirt tones, subtle
+// ruts, scattered pebbles and grass tufts breaking the boundary.
+
+// Catmull-Rom resampling of the waypoint polyline into a dense curve.
+function smoothTrail(waypoints, samplesPerSegment = 20) {
+  const pts = waypoints.map(([x, y]) => ({ x, y }));
+  if (pts.length < 2) return pts;
+  const ext = [pts[0], ...pts, pts[pts.length - 1]];
+  const out = [];
+  for (let i = 1; i < ext.length - 2; i++) {
+    const a = ext[i - 1], b = ext[i], c = ext[i + 1], d = ext[i + 2];
+    for (let t = 0; t < samplesPerSegment; t++) {
+      const s = t / samplesPerSegment, s2 = s * s, s3 = s2 * s;
+      out.push({
+        x: 0.5 * (2 * b.x + (-a.x + c.x) * s + (2 * a.x - 5 * b.x + 4 * c.x - d.x) * s2 + (-a.x + 3 * b.x - 3 * c.x + d.x) * s3),
+        y: 0.5 * (2 * b.y + (-a.y + c.y) * s + (2 * a.y - 5 * b.y + 4 * c.y - d.y) * s2 + (-a.y + 3 * b.y - 3 * c.y + d.y) * s3),
+      });
+    }
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+
+// Deterministic PRNG (mulberry32) so the trail is identical every session.
+function trailRand(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function trailNormal(pts, i) {
+  const prev = pts[Math.max(0, i - 1)];
+  const next = pts[Math.min(pts.length - 1, i + 1)];
+  const dx = next.x - prev.x, dy = next.y - prev.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: -dy / len, y: dx / len };
+}
+
+function strokeSmoothTrail(c, pts) {
+  c.beginPath();
+  c.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) c.lineTo(pts[i].x, pts[i].y);
+  c.stroke();
+}
+
+let _trailPlate = null, _trailPlateW = 0, _trailPlateH = 0;
+
+function makeTrailPlate(lineWidth) {
+  const w = VIEW_W, h = VIEW_H;
+  const plate = document.createElement('canvas');
+  plate.width = w; plate.height = h;
+  const c = plate.getContext('2d');
+  const rand = trailRand(0x0d05a);
+  const pts = smoothTrail(WAYPOINTS, 22);
+  const half = lineWidth / 2;
+
+  // 1. Dusty shoulder — wide, faint strokes that dissolve into terrain.
+  for (const [wd, alpha] of [[lineWidth + 46, 0.07], [lineWidth + 28, 0.10], [lineWidth + 14, 0.14]]) {
+    c.strokeStyle = `rgba(160, 138, 96, ${alpha})`;
+    c.lineWidth = wd;
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    strokeSmoothTrail(c, pts);
+  }
+
+  // 2. Dirt base — overlapping quads with gentle width wobble.
+  c.fillStyle = '#9b7f52';
+  for (let i = 0; i < pts.length - 1; i++) {
+    const nA = trailNormal(pts, i), nB = trailNormal(pts, i + 1);
+    const hA = half * (1 + (rand() - 0.5) * 0.20);
+    const hB = half * (1 + (rand() - 0.5) * 0.20);
+    const a = pts[i], b = pts[i + 1];
+    c.beginPath();
+    c.moveTo(a.x + nA.x * hA, a.y + nA.y * hA);
+    c.lineTo(b.x + nB.x * hB, b.y + nB.y * hB);
+    c.lineTo(b.x - nB.x * hB, b.y - nB.y * hB);
+    c.lineTo(a.x - nA.x * hA, a.y - nA.y * hA);
+    c.closePath();
+    c.fill();
+  }
+
+  // 3. Mottled patches — dry sand and damp dirt variation.
+  for (let i = 2; i < pts.length - 2; i += 6) {
+    const p = pts[i], n = trailNormal(pts, i);
+    const off = (rand() - 0.5) * lineWidth * 0.55;
+    const light = rand() > 0.5;
+    c.fillStyle = light
+      ? `rgba(196, 168, 116, ${0.26 + rand() * 0.16})`
+      : `rgba(122, 96, 58, ${0.24 + rand() * 0.16})`;
+    c.beginPath();
+    c.ellipse(p.x + n.x * off, p.y + n.y * off, 12 + rand() * 18, 8 + rand() * 10, rand() * Math.PI, 0, Math.PI * 2);
+    c.fill();
+  }
+
+  // 4. Worn ruts — two faint parallel curves (sparse, non-mechanical).
+  for (const side of [-1, 1]) {
+    c.strokeStyle = 'rgba(84, 64, 34, 0.22)';
+    c.lineWidth = 4;
+    c.setLineDash([26, 34]);
+    c.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const n = trailNormal(pts, i);
+      const jit = (rand() - 0.5) * 4;
+      const rx = pts[i].x + n.x * side * half * 0.38 + jit;
+      const ry = pts[i].y + n.y * side * half * 0.38;
+      if (i === 0) c.moveTo(rx, ry); else c.lineTo(rx, ry);
+    }
+    c.stroke();
+    c.setLineDash([]);
+  }
+
+  // 5. Pebbles on the trail surface.
+  for (let i = 0; i < pts.length; i += 9) {
+    const p = pts[i], n = trailNormal(pts, i);
+    const off = (rand() - 0.5) * lineWidth * 0.7;
+    c.fillStyle = `rgba(186, 160, 112, ${0.45 + rand() * 0.3})`;
+    c.beginPath();
+    c.arc(p.x + n.x * off, p.y + n.y * off, 1.4 + rand() * 2, 0, Math.PI * 2);
+    c.fill();
+  }
+
+  // 6. Edge scatter — grass tufts + stones straddling the boundary.
+  for (let i = 2; i < pts.length - 2; i += 5) {
+    const p = pts[i], n = trailNormal(pts, i);
+    const side = rand() > 0.5 ? 1 : -1;
+    const dist = half + 3 + rand() * 13;
+    const x = p.x + n.x * side * dist, y = p.y + n.y * side * dist;
+    if (rand() > 0.45) {
+      c.strokeStyle = ['rgba(82,125,66,0.8)', 'rgba(60,122,60,0.8)', 'rgba(94,140,72,0.8)'][Math.floor(rand() * 3)];
+      c.lineWidth = 1.5;
+      for (let b = -1; b <= 1; b++) {
+        c.beginPath();
+        c.moveTo(x, y);
+        c.lineTo(x + b * 3 + (rand() - 0.5) * 2, y - 5 - rand() * 5);
+        c.stroke();
+      }
+    } else {
+      c.fillStyle = 'rgba(138,133,120,0.7)';
+      c.beginPath(); c.arc(x, y, 1.6 + rand() * 1.6, 0, Math.PI * 2); c.fill();
+      c.fillStyle = 'rgba(111,106,94,0.55)';
+      c.beginPath(); c.arc(x + 3, y + 1.5, 1.1 + rand() * 1.1, 0, Math.PI * 2); c.fill();
+    }
+  }
+
+  // 7. Soft top-light along the upper edge for gentle relief.
+  c.strokeStyle = 'rgba(222, 196, 148, 0.14)';
+  c.lineWidth = 3;
+  c.beginPath();
+  for (let i = 0; i < pts.length; i++) {
+    const n = trailNormal(pts, i);
+    const lx = pts[i].x + n.x * -half * 0.8, ly = pts[i].y + n.y * -half * 0.8;
+    if (i === 0) c.moveTo(lx, ly); else c.lineTo(lx, ly);
+  }
+  c.stroke();
+
+  return plate;
+}
+
+// Render the winding enemy trail over terrain as a worn dirt trail that
+// belongs to the environment (cached plate; one drawImage per frame).
+// Plate is built once in VIEW_W×VIEW_H world space and blitted inside the
+// existing letterbox transform, exactly like renderTerrainBackground.
 export function renderGamePath(ctx, waypoints, lineWidth = 52) {
   if (!waypoints || waypoints.length < 2) return;
-  ctx.save();
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  // Broad worn base.
-  ctx.strokeStyle = '#272017';
-  ctx.lineWidth = lineWidth + 8;
-  path(ctx, waypoints);
-  ctx.stroke();
-  // Compact center.
-  ctx.strokeStyle = '#3b3222';
-  ctx.lineWidth = lineWidth;
-  path(ctx, waypoints);
-  ctx.stroke();
-  // Edge wear line.
-  ctx.strokeStyle = 'rgba(224,164,88,0.18)';
-  ctx.lineWidth = lineWidth + 12;
-  ctx.globalAlpha = 0.55;
-  path(ctx, waypoints);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-  // Subtle worn ruts make the route read as a physical trail rather than a
-  // flat graphic stroke. Keep them sparse and low contrast for enemy clarity.
-  ctx.strokeStyle = 'rgba(48,36,25,0.32)';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([16, 24]);
-  path(ctx, waypoints);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.strokeStyle = 'rgba(205,166,103,0.18)';
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([8, 18]);
-  path(ctx, waypoints);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.restore();
+  if (!_trailPlate) {
+    _trailPlate = makeTrailPlate(lineWidth);
+    _trailPlateW = VIEW_W; _trailPlateH = VIEW_H;
+  }
+  ctx.drawImage(_trailPlate, 0, 0, VIEW_W, VIEW_H);
 }
 
 // Dashed placement hints that do not dominate the board.

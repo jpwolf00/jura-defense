@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { WAYPOINTS, SLOTS, VIEW_W, VIEW_H } from '../../js/path.js';
 import { TOWER_TYPES } from '../../js/tower.js';
+import { drawOrganicTrail, drawTrailEdgeScatter } from './trail-texture.js';
 
 export default class PathLayer extends Phaser.GameObjects.Container {
   constructor(scene, options = {}) {
@@ -43,10 +44,12 @@ export default class PathLayer extends Phaser.GameObjects.Container {
 
     const graphics = scene.add.graphics();
     this.add(graphics);
-    graphics.lineStyle(shoulderWidth, shoulderColor, 1);
-    this._strokePath(graphics, WAYPOINTS);
-    graphics.lineStyle(routeWidth, routeColor, 1);
-    this._strokePath(graphics, WAYPOINTS);
+    // Organic, terrain-integrated trail: spline-smoothed dirt ribbon with
+    // mottling, ruts, pebbles and edge scatter (replaces flat vector strokes).
+    drawOrganicTrail(scene, graphics, { baseWidth: 46 });
+    const edgeGraphics = scene.add.graphics();
+    this.add(edgeGraphics);
+    drawTrailEdgeScatter(scene, edgeGraphics, { baseWidth: 46 });
 
     for (let i = 0; i < SLOTS.length; i++) {
       const slot = SLOTS[i];
